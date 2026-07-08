@@ -4,7 +4,7 @@ import { RecommendationBadge } from "@/components/shared/badges";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, TrendingUp, AlertCircle, Scan, Keyboard, Globe, Image as ImageIcon } from "lucide-react";
+import { ArrowRight, TrendingUp, AlertCircle, Scan, Keyboard, Globe, Image as ImageIcon, Zap } from "lucide-react";
 
 const CAPTURE_CARDS = [
   {
@@ -68,12 +68,30 @@ export default function Dashboard() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold tracking-tight text-primary">Overview</h2>
-        <Link href="/photo-scan">
-          <Button size="sm" className="font-semibold">
-            <Scan className="mr-2 h-4 w-4" /> Scan New Item
+        <Link href="/quick-scan">
+          <Button size="sm" className="font-semibold bg-primary hover:bg-primary/90">
+            <Zap className="mr-2 h-4 w-4" /> Quick Scan In Store
           </Button>
         </Link>
       </div>
+
+      {/* Quick Scan Hero Card */}
+      <Link href="/quick-scan">
+        <div className="rounded-2xl bg-gradient-to-br from-primary to-primary/80 text-primary-foreground p-5 cursor-pointer hover:opacity-95 transition-opacity shadow-md">
+          <div className="flex items-start justify-between">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <Zap className="h-5 w-5" />
+                <span className="text-xl font-black tracking-tight">Quick Scan In Store</span>
+              </div>
+              <p className="text-sm opacity-90 leading-snug max-w-xs">
+                Scan a shelf tag, barcode, box, clearance sticker, or app screen and get a fast BUY / SKIP decision.
+              </p>
+            </div>
+            <ArrowRight className="h-6 w-6 opacity-70 shrink-0 mt-1" />
+          </div>
+        </div>
+      </Link>
 
       {/* Primary Metrics */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

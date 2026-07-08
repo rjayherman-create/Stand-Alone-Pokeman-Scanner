@@ -17,6 +17,7 @@ import FlipDecision from "@/pages/flip-decision";
 import ListingGenerator from "@/pages/listing-generator";
 import Watchlist from "@/pages/watchlist";
 import Settings from "@/pages/settings";
+import QuickScan from "@/pages/quick-scan";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -33,6 +34,7 @@ function Router() {
       <Switch>
         <Route path="/" component={() => <Redirect to="/dashboard" />} />
         <Route path="/dashboard" component={Dashboard} />
+        <Route path="/quick-scan" component={QuickScan} />
         <Route path="/photo-scan" component={PhotoScan} />
         <Route path="/web-check" component={WebCheck} />
         <Route path="/upload-screenshot" component={UploadScreenshot} />

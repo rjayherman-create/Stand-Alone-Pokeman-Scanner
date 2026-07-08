@@ -1,0 +1,391 @@
+ADD QUICK DECISION MODE WITH EBAY AND AMAZON PRICE COMPARISON
+
+Update Retail Flip Scanner with a fast in-store decision workflow.
+
+Goal:
+The user should be able to scan an item in Costco, Walmart, Target, BJ’s, Sam’s Club, Home Depot, Lowe’s, or another store and get a BUY / MAYBE / SKIP / RESEARCH MORE answer in 10–20 seconds.
+
+NEW ROUTE
+
+/quick-scan
+
+NAVIGATION UPDATE
+
+Add:
+- Quick Scan
+
+Dashboard primary button:
+“Quick Scan In Store”
+
+Subtitle:
+“Scan a shelf tag, barcode, box, clearance sticker, or app screen and get a fast buy/skip decision.”
+
+QUICK SCAN WORKFLOW
+
+1. User taps Quick Scan.
+2. User takes photo or uploads image.
+3. App extracts:
+   - retailer
+   - store_location
+   - product_name
+   - brand
+   - category
+   - subcategory
+   - current_store_price
+   - regular_price if visible
+   - clearance_price if visible
+   - percent_off if visible
+   - UPC / GTIN if visible
+   - SKU if visible
+   - DPCI if visible
+   - TCIN if visible
+   - Costco item number if visible
+   - model number if visible
+   - box condition
+   - sealed/open-box condition if visible
+4. App performs fast comp lookup:
+   - eBay active listings
+   - eBay sold/completed comps if available through the configured source
+   - Amazon current price using approved Amazon data source
+   - Amazon price history using Keepa if configured
+5. App returns one large decision card.
+
+QUICK DECISION CARD
+
+Show this first, before detailed tables:
+
+- Recommendation: BUY / MAYBE / SKIP / RESEARCH MORE
+- Product name
+- Store price
+- Best resale channel:
+  - Facebook Marketplace
+  - eBay
+  - Amazon reference only
+- Suggested Facebook list price
+- Expected Facebook sale price
+- Estimated profit
+- Max quantity
+- Confidence score
+- One-sentence reason
+- Risk warning
+
+Example:
+
+BUY
+
+LEGO Speed Champions Assortment
+Store price: $14.97
+
+Suggested FB list: $25
+Expected sale: $20–$22
+Estimated profit: $5–$8 each
+Buy quantity: 2–4
+Confidence: 82%
+
+Reason:
+Strong LEGO demand, low clearance price, easy local sale, and small sealed box.
+
+Sticky buttons:
+- Save
+- Generate Listing
+- Compare Details
+- Scan Next
+
+PRICE COMP SOURCES
+
+eBay:
+Use the official eBay Browse API where available.
+Search by:
+- UPC / GTIN first
+- model number second
+- exact product title third
+- brand + product keywords fourth
+
+Collect:
+- active listing count
+- active low price
+- active median price
+- active high price
+- sold/completed median if available through configured API/source
+- shipping cost if available
+- item condition
+- title match confidence
+- category match confidence
+
+Amazon:
+Do not scrape Amazon pages.
+Use an approved Amazon data source only:
+- Amazon Creators API / approved Amazon product API if configured
+- Keepa API if configured
+- manual Amazon price entry if no API is configured
+
+Collect when available:
+- ASIN
+- current Amazon price
+- Buy Box or current offer price if available
+- 30-day average price
+- 90-day average price
+- sales rank if available
+- Amazon availability
+- Keepa price history if available
+
+If no Amazon API is configured:
+Show:
+“Amazon data source not connected. Use eBay comps and manual Amazon price if needed.”
+
+MATCHING LOGIC
+
+Create function:
+
+matchProductForComps(scannedItem)
+
+Priority:
+1. UPC / GTIN exact match
+2. ASIN if detected
+3. DPCI / TCIN for Target when available
+4. SKU / model number
+5. Brand + exact product title
+6. Image/title similarity fallback
+
+Return:
+- match_confidence
+- match_method
+- matched_title
+- matched_identifier
+- warning_if_low_confidence
+
+If match_confidence is below 70:
+Set recommendation to RESEARCH MORE unless the store price is extremely low and category is known.
+
+COMPARISON LOGIC
+
+Create function:
+
+buildCompSummary(scannedItem, ebayData, amazonData)
+
+Output:
+- ebay_active_median
+- ebay_sold_median
+- amazon_current_price
+- amazon_30_day_average
+- amazon_90_day_average
+- estimated_local_facebook_sale_price
+- expected_fees_if_sold_on_ebay
+- expected_shipping_risk
+- suggested_channel
+- comp_confidence
+
+Facebook Marketplace estimate:
+Use local resale estimate, not full Amazon retail.
+
+Rules:
+- For local Facebook sale, start with 70% to 85% of realistic eBay sold median for common sealed items.
+- For fast flips, price slightly below eBay active listings.
+- For bulky items, prefer Facebook Marketplace and reduce expected price.
+- For small shippable items with high eBay sold comps, suggest eBay as optional.
+- For Amazon, use as reference price only unless user is approved to sell that item.
+
+PROFIT LOGIC
+
+Create function:
+
+calculateProfit(scannedItem, compSummary)
+
+Inputs:
+- store price
+- sales tax
+- expected sale price
+- platform fees
+- shipping estimate
+- packaging estimate
+- gas/time buffer optional
+
+For Facebook Marketplace:
+- default platform fee: $0 for local cash/pickup
+- packaging: $0
+- shipping: $0
+- use negotiation floor
+
+For eBay:
+- include estimated platform fees
+- include shipping and packing risk
+- use net profit, not gross spread
+
+Output:
+- gross_spread
+- estimated_net_profit
+- profit_margin_percent
+- negotiation_floor
+- max_buy_price
+- recommended_quantity
+
+FAST DECISION RULES
+
+BUY:
+- match confidence 75+
+- estimated net profit meets category minimum
+- item is easy to store/sell
+- not too bulky
+- not damaged
+- category has good demand
+
+MAYBE:
+- profit exists but match confidence is medium
+- demand uncertain
+- buy only 1 test unit
+
+SKIP:
+- no real spread
+- Amazon/eBay price too close to store price
+- damaged/open box risk
+- heavy/bulky with low profit
+- too niche
+
+RESEARCH MORE:
+- product identity unclear
+- model number missing
+- comps are mixed
+- price is missing
+- eBay/Amazon data unavailable
+- item may be restricted or hard to sell
+
+QUICK SCAN RESULT STATES
+
+1. Clean Buy
+Show:
+“BUY — enough spread.”
+
+2. Thin Spread
+Show:
+“SKIP — not enough profit after realistic resale price.”
+
+3. Unclear Match
+Show:
+“RESEARCH MORE — scan barcode or side model number.”
+
+4. Bulky Risk
+Show:
+“MAYBE — profit exists, but storage/transport risk is high.”
+
+5. Damaged Box
+Show:
+“MAYBE/SKIP — box condition may lower resale price.”
+
+CATEGORY MINIMUM PROFITS
+
+Default minimum profit by category:
+- LEGO: $7
+- Toys: $7
+- Tools: $15
+- Small Appliances: $15
+- Electronics: $20
+- Seasonal: $10
+- Sporting Goods: $10
+- Golf: $15
+- Baby Gear: $15
+- Home Goods: $10
+- Furniture: $30
+- Outdoor / Patio: $25
+- Video Games: $7
+- Collectibles: $10
+- Automotive: $15
+- Other: $10
+
+IN-STORE SPEED FEATURES
+
+Add:
+- One-tap Scan Next
+- Voice note option
+- Large result text
+- Offline pending scans if internet is weak
+- Save photo evidence
+- Auto-fill retailer/store from last scan
+- Keep screen awake during scan session
+- Haptic/vibration feedback if BUY
+- Session summary at end of trip
+
+SCAN SESSION SUMMARY
+
+At the end of a store trip show:
+- Total scanned
+- BUY count
+- MAYBE count
+- SKIP count
+- RESEARCH MORE count
+- Estimated total profit
+- Best item
+- Items to buy before leaving
+- Items to research later
+- Suggested Facebook listings to create
+
+DETAIL VIEW
+
+When user taps Compare Details, show:
+
+eBay section:
+- matched title
+- active count
+- active median
+- sold median
+- low/high range
+- confidence
+- notes
+
+Amazon section:
+- matched ASIN/title
+- current price
+- 30-day average
+- 90-day average
+- rank if available
+- confidence
+- notes
+
+Local Facebook section:
+- suggested list price
+- expected sale price
+- floor price
+- bundle offer
+- local pickup wording
+
+DO NOT OVERLOAD QUICK VIEW
+
+The first screen must not show a huge table.
+Only show:
+- BUY / MAYBE / SKIP / RESEARCH MORE
+- price
+- expected sale
+- profit
+- reason
+- buttons
+
+Put detailed eBay/Amazon data behind “Compare Details.”
+
+ERROR MESSAGES
+
+If eBay data fails:
+“eBay comps unavailable. Try scanning the barcode or entering the model number.”
+
+If Amazon data fails:
+“Amazon data source not connected or unavailable. Decision is based on store price and eBay/local comps.”
+
+If both fail:
+“Comps unavailable. Save this as Research More or enter a manual comp.”
+
+If product identity is unclear:
+“Scan the barcode, model number, or front of the box for a better match.”
+
+SUCCESS CRITERIA
+
+The Quick Scan feature is successful when the user can:
+1. Scan a clearance item in-store.
+2. See BUY / MAYBE / SKIP in 10–20 seconds.
+3. Compare against eBay and Amazon data.
+4. Understand the realistic Facebook Marketplace resale price.
+5. Save the item or scan the next one immediately.
+6. Avoid buying items with fake spreads or weak comps.
+
+FINAL QUICK SCAN QUESTION
+
+The screen should answer:
+
+“Should I put this in my cart right now?”

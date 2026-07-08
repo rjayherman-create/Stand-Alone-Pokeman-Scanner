@@ -10,13 +10,15 @@ import {
   Bookmark, 
   Settings,
   Menu,
-  FileText
+  FileText,
+  Zap
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/quick-scan", label: "Quick Scan", icon: Zap, highlight: true },
   { href: "/photo-scan", label: "Photo Scan", icon: Camera },
   { href: "/upload-screenshot", label: "Upload Screenshot", icon: Upload },
   { href: "/web-check", label: "Check Online", icon: Globe },
@@ -51,10 +53,19 @@ export function AppLayout({ children }: { children: ReactNode }) {
           <Link key={item.href} href={item.href} className="w-full">
             <Button
               variant={isActive ? "secondary" : "ghost"}
-              className={`w-full justify-start ${isActive ? "bg-primary/10 text-primary hover:bg-primary/20" : ""}`}
+              className={`w-full justify-start ${
+                isActive
+                  ? "bg-primary/10 text-primary hover:bg-primary/20"
+                  : item.highlight
+                  ? "text-primary font-semibold hover:bg-primary/10"
+                  : ""
+              }`}
             >
-              <Icon className="mr-2 h-4 w-4" />
+              <Icon className={`mr-2 h-4 w-4 ${item.highlight && !isActive ? "text-primary" : ""}`} />
               {item.label}
+              {item.highlight && !isActive && (
+                <span className="ml-auto text-[10px] bg-primary/10 text-primary rounded-full px-1.5 py-0.5 font-bold">NEW</span>
+              )}
             </Button>
           </Link>
         );

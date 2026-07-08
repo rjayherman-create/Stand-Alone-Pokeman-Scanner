@@ -1,0 +1,58 @@
+import { pgTable, serial, text, real, integer, timestamp } from "drizzle-orm/pg-core";
+
+export const quickScanSessionsTable = pgTable("quick_scan_sessions", {
+  id: serial("id").primaryKey(),
+  retailer: text("retailer").notNull().default("Costco"),
+  store_location: text("store_location").notNull(),
+  started_at: timestamp("started_at").defaultNow().notNull(),
+  ended_at: timestamp("ended_at"),
+  total_scans: integer("total_scans").notNull().default(0),
+  buy_count: integer("buy_count").notNull().default(0),
+  maybe_count: integer("maybe_count").notNull().default(0),
+  skip_count: integer("skip_count").notNull().default(0),
+  research_more_count: integer("research_more_count").notNull().default(0),
+  estimated_total_profit: real("estimated_total_profit"),
+  notes: text("notes"),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const quickScanResultsTable = pgTable("quick_scan_results", {
+  id: serial("id").primaryKey(),
+  session_id: integer("session_id"),
+  inventory_item_id: integer("inventory_item_id"),
+  retailer: text("retailer").notNull(),
+  store_location: text("store_location").notNull(),
+  product_name: text("product_name"),
+  brand: text("brand"),
+  category: text("category"),
+  current_store_price: real("current_store_price"),
+  regular_price: real("regular_price"),
+  clearance_price: real("clearance_price"),
+  percent_off: real("percent_off"),
+  upc: text("upc"),
+  gtin: text("gtin"),
+  sku: text("sku"),
+  dpci: text("dpci"),
+  tcin: text("tcin"),
+  costco_item_number: text("costco_item_number"),
+  model_number: text("model_number"),
+  ebay_active_median: real("ebay_active_median"),
+  ebay_sold_median: real("ebay_sold_median"),
+  ebay_active_range: text("ebay_active_range"),
+  amazon_current_price: real("amazon_current_price"),
+  amazon_30_day_average: real("amazon_30_day_average"),
+  amazon_90_day_average: real("amazon_90_day_average"),
+  suggested_facebook_list_price: real("suggested_facebook_list_price"),
+  expected_facebook_sale_price: real("expected_facebook_sale_price"),
+  estimated_profit: real("estimated_profit"),
+  profit_margin_percent: real("profit_margin_percent"),
+  recommendation: text("recommendation"),
+  confidence_score: integer("confidence_score"),
+  risk_warning: text("risk_warning"),
+  one_sentence_reason: text("one_sentence_reason"),
+  max_quantity: text("max_quantity"),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type QuickScanSession = typeof quickScanSessionsTable.$inferSelect;
+export type QuickScanResult = typeof quickScanResultsTable.$inferSelect;

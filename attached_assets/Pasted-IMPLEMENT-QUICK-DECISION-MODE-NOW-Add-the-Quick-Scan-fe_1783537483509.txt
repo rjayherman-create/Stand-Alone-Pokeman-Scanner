@@ -1,0 +1,496 @@
+IMPLEMENT QUICK DECISION MODE NOW
+
+Add the Quick Scan feature to Retail Flip Scanner.
+
+Route:
+- /quick-scan
+
+Main goal:
+The user is standing in a store and needs a fast answer:
+“Should I put this in my cart right now?”
+
+The app must return:
+BUY / MAYBE / SKIP / RESEARCH MORE
+
+within 10–20 seconds when possible.
+
+IMPORTANT IMPLEMENTATION RULES
+
+Do not wait for perfect data.
+Use the best available data in this order:
+
+1. Exact barcode / UPC / GTIN match
+2. Model number match
+3. Store item number / DPCI / TCIN / SKU
+4. Brand + product title
+5. AI visual/title match
+6. Manual user correction
+
+If eBay or Amazon data is unavailable, still return a decision using:
+- scanned store price
+- category rules
+- markdown strength
+- manual or estimated resale range
+- risk warning
+
+QUICK SCAN UI
+
+Create page:
+/quick-scan
+
+Page layout:
+- Large title: Quick Scan
+- Subtitle: Scan it. Compare it. Decide fast.
+- Large camera/upload box
+- Retailer selector
+- Store selector
+- Category auto-detected but editable
+- Button: Quick Scan
+- Recent scan strip at bottom
+
+Primary buttons:
+- Take Photo
+- Upload Image
+- Scan Barcode
+- Manual Price Entry
+
+After scan, show ONE large result card first.
+
+DO NOT show a big table first.
+
+QUICK RESULT CARD DESIGN
+
+The result card should have:
+
+Top:
+- Big recommendation badge:
+  BUY / MAYBE / SKIP / RESEARCH MORE
+
+Then:
+- Product name
+- Store price
+- eBay likely sale price
+- Amazon reference price if available
+- Suggested Facebook Marketplace list price
+- Expected local sale price
+- Estimated profit
+- Suggested quantity
+- Confidence score
+- One-sentence reason
+- Risk warning
+
+Sticky buttons:
+- Save
+- Generate Listing
+- Compare Details
+- Scan Next
+
+Example result:
+
+BUY
+
+LEGO Speed Champions Assortment
+Store price: $14.97
+
+eBay active range: $24–$32
+eBay likely sale: $20–$26
+Amazon reference range: $28–$35
+
+Suggested FB list: $25
+Expected local sale: $20–$22
+Estimated profit: $5–$8 each
+Buy quantity: 2–4
+Confidence: 82%
+
+Reason:
+Good markdown, strong LEGO demand, small sealed item, enough spread for local pickup.
+
+Risk:
+Watch for local Costco saturation.
+
+DATA SOURCES
+
+eBay:
+Use official eBay API where configured.
+
+Create env vars:
+- EBAY_CLIENT_ID
+- EBAY_CLIENT_SECRET
+- EBAY_MARKETPLACE_ID default EBAY_US
+
+eBay lookup order:
+1. UPC / GTIN
+2. model number
+3. exact title
+4. brand + title keywords
+
+Return:
+- active_count
+- active_low
+- active_median
+- active_high
+- sold_median if available
+- shipping_median if available
+- match_confidence
+- matched_title
+- matched_url optional
+
+Amazon:
+Do not scrape Amazon.
+
+Use approved data sources only:
+- Keepa API if configured
+- approved Amazon product API if configured
+- manual Amazon price entry if not configured
+
+Create env vars:
+- KEEPA_API_KEY
+- AMAZON_API_ENABLED=false by default
+
+If Amazon/Keepa is not configured, show:
+“Amazon data source not connected. Decision is based on eBay, store price, and local resale estimate.”
+
+QUICK SCAN API ROUTES
+
+Create:
+
+POST /api/quick-scan
+Purpose:
+Accept image/barcode/manual input and return fast decision.
+
+Input:
+- image optional
+- barcode optional
+- retailer
+- store_location
+- category optional
+- manual_price optional
+- user_note optional
+
+Output:
+- scanned_item
+- comp_summary
+- profit_summary
+- recommendation
+- quick_decision_card
+
+Create:
+
+POST /api/lookup-ebay-comps
+Purpose:
+Get eBay active and sold/completed comps when available.
+
+Create:
+
+POST /api/lookup-amazon-comps
+Purpose:
+Get Amazon/Keepa data only if approved API is configured.
+
+Create:
+
+POST /api/manual-comp
+Purpose:
+Allow user to manually enter eBay/Amazon/Facebook comp if APIs fail.
+
+Create:
+
+POST /api/save-quick-scan
+Purpose:
+Save scan result to inventory.
+
+FUNCTIONS TO BUILD
+
+1. extractItemFromScan(image)
+
+Extract:
+- retailer
+- product_name
+- brand
+- category
+- subcategory
+- current_store_price
+- regular_price
+- clearance_price
+- percent_off
+- UPC / GTIN
+- SKU
+- DPCI
+- TCIN
+- Costco item number
+- model number
+- box_condition
+- sealed_status
+- confidence
+
+2. matchProductForComps(scannedItem)
+
+Match priority:
+- UPC / GTIN exact match
+- ASIN if available
+- DPCI / TCIN
+- SKU / model number
+- brand + exact product title
+- fuzzy title match
+
+Return:
+- match_confidence
+- match_method
+- matched_title
+- matched_identifier
+- warning_if_low_confidence
+
+3. buildCompSummary(scannedItem, ebayData, amazonData)
+
+Return:
+- ebay_active_median
+- ebay_sold_median
+- ebay_active_range
+- amazon_current_price
+- amazon_30_day_average
+- amazon_90_day_average
+- estimated_local_facebook_sale_price
+- suggested_facebook_list_price
+- suggested_channel
+- comp_confidence
+- comp_notes
+
+Facebook Marketplace estimate rules:
+- Use 70%–85% of realistic eBay sold median for common sealed items.
+- For fast local sale, price below eBay active median.
+- For bulky items, reduce local estimate.
+- For new sealed LEGO/toys, use eBay sold median as the strongest reference.
+- Amazon is reference only unless user is approved to sell on Amazon.
+
+4. calculateProfit(scannedItem, compSummary)
+
+For Facebook Marketplace:
+- platform fee = 0
+- shipping = 0
+- packaging = 0
+- use local sale price
+- include optional tax if user enables it
+
+For eBay:
+- include estimated platform fees
+- include shipping
+- include packing
+- calculate net profit, not gross spread
+
+Return:
+- gross_spread
+- estimated_net_profit
+- profit_margin_percent
+- negotiation_floor
+- max_buy_price
+- recommended_quantity
+
+5. makeQuickDecision(scannedItem, compSummary, profitSummary)
+
+Return:
+- recommendation: BUY / MAYBE / SKIP / RESEARCH_MORE
+- confidence_score
+- one_sentence_reason
+- risk_warning
+- max_quantity
+- best_next_action
+
+DECISION RULES
+
+BUY:
+- match confidence 75+
+- estimated profit meets category minimum
+- item is not bulky
+- item is not visibly damaged
+- demand category is strong
+- local sale price gives enough spread
+
+MAYBE:
+- profit exists but comps are mixed
+- confidence is medium
+- item may be bulky
+- buy only 1 test unit
+
+SKIP:
+- not enough spread
+- eBay/Amazon price too close to store price
+- damaged box
+- heavy/bulky with low profit
+- niche or slow-moving item
+
+RESEARCH_MORE:
+- product identity unclear
+- barcode/model missing
+- comps unavailable
+- Amazon/eBay results conflict
+- price missing
+- category is unfamiliar
+
+CATEGORY MINIMUM PROFIT DEFAULTS
+
+Use these defaults:
+- LEGO: 7
+- Toys: 7
+- Tools: 15
+- Small Appliances: 15
+- Electronics: 20
+- Seasonal: 10
+- Sporting Goods: 10
+- Golf: 15
+- Baby Gear: 15
+- Home Goods: 10
+- Furniture: 30
+- Outdoor / Patio: 25
+- Video Games: 7
+- Collectibles: 10
+- Automotive: 15
+- Other: 10
+
+IN-STORE SPEED REQUIREMENTS
+
+Add:
+- One-tap Scan Next
+- Save photo evidence
+- Auto-fill last retailer and store
+- Offline pending scans
+- Voice note field
+- Keep screen awake during scan session
+- Very large BUY / MAYBE / SKIP text
+- Minimal typing
+- Session summary at end
+
+SESSION SUMMARY
+
+At end of trip show:
+- total scanned
+- BUY count
+- MAYBE count
+- SKIP count
+- RESEARCH MORE count
+- estimated total profit
+- best item found
+- items to buy before leaving
+- items to research later
+- suggested Facebook listings
+
+COMPARE DETAILS VIEW
+
+Only show this after user taps Compare Details.
+
+Sections:
+
+eBay:
+- matched title
+- active count
+- active low
+- active median
+- active high
+- sold median if available
+- shipping estimate
+- confidence
+- notes
+
+Amazon:
+- matched ASIN/title if available
+- current price
+- 30-day average
+- 90-day average
+- sales rank if available
+- confidence
+- notes
+
+Facebook Marketplace:
+- suggested list price
+- expected local sale price
+- floor price
+- bundle offer
+- pickup wording
+
+ERROR STATES
+
+If eBay fails:
+“eBay comps unavailable. Try scanning the barcode or entering the model number.”
+
+If Amazon fails:
+“Amazon data source not connected or unavailable. Decision is based on store price and eBay/local comps.”
+
+If both fail:
+“Comps unavailable. Save this as Research More or enter a manual comp.”
+
+If product identity is unclear:
+“Scan the barcode, model number, or front of the box for a better match.”
+
+If price is unclear:
+“Price not detected. Enter the store price to calculate profit.”
+
+DATABASE UPDATES
+
+Add QuickScanSession:
+
+- id
+- retailer
+- store_location
+- started_at
+- ended_at
+- total_scans
+- buy_count
+- maybe_count
+- skip_count
+- research_more_count
+- estimated_total_profit
+- notes
+
+Add QuickScanResult:
+
+- id
+- session_id
+- inventory_item_id optional
+- image_url
+- barcode
+- retailer
+- store_location
+- product_name
+- brand
+- category
+- current_store_price
+- regular_price
+- clearance_price
+- percent_off
+- upc
+- gtin
+- sku
+- dpci
+- tcin
+- costco_item_number
+- model_number
+- ebay_active_median
+- ebay_sold_median
+- ebay_active_range
+- amazon_current_price
+- amazon_30_day_average
+- amazon_90_day_average
+- suggested_facebook_list_price
+- expected_facebook_sale_price
+- estimated_profit
+- profit_margin_percent
+- recommendation
+- confidence_score
+- risk_warning
+- one_sentence_reason
+- max_quantity
+- created_at
+
+UI SUCCESS CRITERIA
+
+The Quick Scan screen is successful when:
+- The user can scan an item in the store.
+- The first result is easy to read in under 3 seconds.
+- The decision appears in 10–20 seconds when APIs respond.
+- The user can save, generate listing, compare details, or scan next with one tap.
+- The app avoids fake profit caused by inflated Amazon prices.
+- The app uses realistic Facebook Marketplace resale price.
+
+FINAL SCREEN QUESTION
+
+Every Quick Scan result must answer:
+
+“Should I put this in my cart right now?”
