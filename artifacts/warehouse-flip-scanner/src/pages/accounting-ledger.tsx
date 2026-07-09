@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Calculator, Download, PackageCheck, Receipt, RotateCcw, ShoppingCart, TrendingUp } from "lucide-react";
+import { useLocation } from "wouter";
+import { Calculator, Download, PackageCheck, Receipt, ShoppingCart, TrendingUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,9 +17,15 @@ const EXPENSE_TYPES = ["Gas", "Parking", "Shipping supplies", "Storage", "Market
 const RETURN_REASONS = ["Could not sell", "Damaged", "Bad comps", "Buyer issue", "Returned to store", "Kept for personal use", "Other"];
 
 export default function AccountingLedgerPage() {
+  const [location] = useLocation();
   const [data, setData] = useState({ entries: [] as Row[], lots: [] as Row[], sales: [] as Row[], expenses: [] as Row[], summary: {} as Row });
   const [loading, setLoading] = useState(false);
   const [filters, setFilters] = useState({ search: "", type: "all" });
+  const [selectedInventoryItem, setSelectedInventoryItem] = useState<Row | null>(null);
+  const inventoryItemId = useMemo(() => {
+    const search = typeof window === "undefined" ? "" : window.location.search;
+    return new URLSearchParams(search).get("inventory_item_id");
+  }, [location]);
 
   async function load() {
     setLoading(true);
@@ -30,6 +37,17 @@ export default function AccountingLedgerPage() {
   }
 
   useEffect(() => { void load(); }, [filters]);
+
+  useEffect(() => {
+    if (!inventoryItemId) {
+      setSelectedInventoryItem(null);
+      return;
+    }
+    fetch(`/api/inventory/${inventoryItemId}`)
+      .then((response) => response.ok ? response.json() : null)
+      .then(setSelectedInventoryItem)
+      .catch(() => setSelectedInventoryItem(null));
+  }, [inventoryItemId]);
 
   const activeLots = useMemo(() => data.lots.filter((lot) => lot.quantity_remaining > 0 && !["Returned", "Kept", "Donated"].includes(lot.status)), [data.lots]);
   const lossSales = useMemo(() => data.sales.filter((sale) => sale.net_profit < 0), [data.sales]);
@@ -68,7 +86,7 @@ export default function AccountingLedgerPage() {
         </CardContent>
       </Card>
 
-      <Tabs defaultValue="transactions" className="space-y-4">
+      <Tabs defaultValue={inventoryItemId ? "purchases" : "transactions"} className="space-y-4">
         <TabsList className="flex h-auto flex-wrap justify-start">
           <TabsTrigger value="transactions">All Transactions</TabsTrigger>
           <TabsTrigger value="purchases">Purchases</TabsTrigger>
@@ -82,7 +100,7 @@ export default function AccountingLedgerPage() {
         </TabsList>
 
         <TabsContent value="transactions"><LedgerTable rows={data.entries} /></TabsContent>
-        <TabsContent value="purchases"><PurchaseForm onSaved={load} /><LotsTable rows={data.lots} /></TabsContent>
+        <TabsContent value="purchases"><PurchaseForm initialItem={selectedInventoryItem} onSaved={load} /><LotsTable rows={data.lots} /></TabsContent>
         <TabsContent value="active"><ActiveInventory lots={activeLots} onSaved={load} /></TabsContent>
         <TabsContent value="sold"><SoldItems sales={data.sales} lots={data.lots} /></TabsContent>
         <TabsContent value="summary"><ProfitSummary summary={data.summary} lots={activeLots} sales={data.sales} /></TabsContent>
@@ -124,8 +142,9 @@ function SummaryCards({ summary, loading }: { summary: Row; loading: boolean }) 
   );
 }
 
-function PurchaseForm({ onSaved }: { onSaved: () => void }) {
+function PurchaseForm({ initialItem, onSaved }: { initialItem?: Row | null; onSaved: () => void }) {
   const [form, setForm] = useState({
+    inventory_item_id: "",
     product_name: "",
     retailer: "Costco",
     store_location: "",
@@ -138,11 +157,33 @@ function PurchaseForm({ onSaved }: { onSaved: () => void }) {
     receipt_photo_url: "",
     notes: "",
   });
+
+  useEffect(() => {
+    if (!initialItem) return;
+    setForm((prev) => ({
+      ...prev,
+      inventory_item_id: String(initialItem.id),
+      product_name: initialItem.product_name ?? "",
+      retailer: initialItem.retailer ?? "Costco",
+      store_location: initialItem.store_location ?? "",
+      category: initialItem.category ?? "",
+      quantity_bought: parseSuggestedQuantity(initialItem.suggested_quantity ?? initialItem.max_quantity),
+      unit_purchase_price: String(initialItem.current_store_price ?? initialItem.price ?? ""),
+      notes: initialItem.one_sentence_reason ?? initialItem.risk_notes ?? prev.notes,
+    }));
+  }, [initialItem]);
+
   async function save(generateListing = false) {
     const response = await fetch("/api/accounting-ledger/purchase", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...form, quantity_bought: Number(form.quantity_bought), unit_purchase_price: Number(form.unit_purchase_price), sales_tax_total: Number(form.sales_tax_total) }),
+      body: JSON.stringify({
+        ...form,
+        inventory_item_id: form.inventory_item_id ? Number(form.inventory_item_id) : undefined,
+        quantity_bought: Number(form.quantity_bought),
+        unit_purchase_price: Number(form.unit_purchase_price),
+        sales_tax_total: Number(form.sales_tax_total),
+      }),
     });
     if (response.ok) {
       const data = await response.json();
@@ -151,7 +192,7 @@ function PurchaseForm({ onSaved }: { onSaved: () => void }) {
     }
   }
   return (
-    <FormCard title="Record Purchase">
+    <FormCard title={initialItem ? `Record Purchase: ${initialItem.product_name}` : "Record Purchase"}>
       <div className="grid md:grid-cols-4 gap-3">
         <Field label="Product name" value={form.product_name} onChange={(v) => setForm({ ...form, product_name: v })} />
         <Field label="Retailer" value={form.retailer} onChange={(v) => setForm({ ...form, retailer: v })} />
@@ -168,6 +209,11 @@ function PurchaseForm({ onSaved }: { onSaved: () => void }) {
       <div className="flex gap-2"><Button onClick={() => save(false)}>Save Purchase</Button><Button variant="outline" onClick={() => save(true)}>Save and Generate Listing</Button></div>
     </FormCard>
   );
+}
+
+function parseSuggestedQuantity(value: unknown) {
+  const match = String(value ?? "").match(/\d+/);
+  return match?.[0] ?? "1";
 }
 
 function SaleForm({ lot, onSaved }: { lot: Row; onSaved: () => void }) {

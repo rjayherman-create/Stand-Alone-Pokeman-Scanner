@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RecommendationBadge, SourceTypeBadge, MarkdownCodeBadge } from "@/components/shared/badges";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Trash2, Search, FileText, TrendingUp, ArrowUpDown } from "lucide-react";
+import { Trash2, Search, FileText, TrendingUp, ArrowUpDown, ShoppingCart } from "lucide-react";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 
@@ -30,11 +30,14 @@ interface InventoryItem {
   product_name: string;
   store_location?: string | null;
   price?: number | null;
+  retailer?: string | null;
+  category?: string | null;
   recommendation?: string | null;
   flip_score?: number | null;
   source_type?: string | null;
   markdown_code?: string | null;
   estimated_profit?: string | null;
+  expected_facebook_sale_price?: number | null;
   created_at?: string | null;
 }
 
@@ -79,9 +82,16 @@ export default function Inventory() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-primary">Inventory</h2>
-        <span className="text-sm text-muted-foreground">{filtered.length} items</span>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-primary">Inventory</h2>
+          <p className="text-sm text-muted-foreground">Scan decisions become purchases, listings, and real profit tracking from here.</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm text-muted-foreground">{filtered.length} items</span>
+          <Button variant="outline" size="sm" asChild><Link href="/inventory-spreadsheet">Spreadsheet</Link></Button>
+          <Button variant="outline" size="sm" asChild><Link href="/accounting-ledger">Ledger</Link></Button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -153,6 +163,11 @@ export default function Inventory() {
                       <span className="text-lg font-bold text-muted-foreground">{item.flip_score}</span>
                     )}
                     <div className="flex gap-1">
+                      <Button size="icon" variant="ghost" className="h-8 w-8 text-success" asChild title="Record purchase">
+                        <Link href={`/accounting-ledger?inventory_item_id=${item.id}`}>
+                          <ShoppingCart className="h-4 w-4" />
+                        </Link>
+                      </Button>
                       <Button size="icon" variant="ghost" className="h-8 w-8 text-primary" asChild>
                         <Link href={`/flip-decision/${item.id}`}>
                           <TrendingUp className="h-4 w-4" />

@@ -44,6 +44,27 @@ router.get("/inventory", async (req, res) => {
   }
 });
 
+router.get("/inventory/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const [item] = await db
+      .select()
+      .from(inventoryItemsTable)
+      .where(eq(inventoryItemsTable.id, id))
+      .limit(1);
+
+    if (!item || item.is_deleted) {
+      res.status(404).json({ error: "Item not found" });
+      return;
+    }
+
+    res.json(serializeItem(item));
+  } catch (err) {
+    req.log.error({ err }, "Failed to fetch inventory item");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 router.post("/inventory", async (req, res) => {
   try {
     const body = req.body;
