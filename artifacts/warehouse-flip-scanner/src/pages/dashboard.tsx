@@ -4,7 +4,7 @@ import { RecommendationBadge } from "@/components/shared/badges";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, TrendingUp, AlertCircle, Scan, Keyboard, Globe, Image as ImageIcon, Zap } from "lucide-react";
+import { ArrowRight, TrendingUp, AlertCircle, Scan, Keyboard, Globe, Image as ImageIcon, Zap, Table2, Calculator, ReceiptText } from "lucide-react";
 
 const CAPTURE_CARDS = [
   {
@@ -128,6 +128,52 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Capture Method Quick-Launch Cards */}
+      <Card className="shadow-sm border-primary/20 bg-primary/5">
+        <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <Table2 className="h-5 w-5 text-primary mt-0.5" />
+            <div>
+              <h3 className="font-bold">Analysis Spreadsheet</h3>
+              <p className="text-sm text-muted-foreground">View, edit, delete, filter, and export every scanned item and flip decision.</p>
+            </div>
+          </div>
+          <Button asChild className="shrink-0">
+            <Link href="/inventory-spreadsheet">Open Spreadsheet</Link>
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card className="shadow-sm border-success/20 bg-success/5">
+        <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <Calculator className="h-5 w-5 text-success mt-0.5" />
+            <div>
+              <h3 className="font-bold">Flip Budget Planner</h3>
+              <p className="text-sm text-muted-foreground">Set your buying budget for today, this week, 2 weeks, or the month and get a smart buy plan.</p>
+            </div>
+          </div>
+          <Button asChild className="shrink-0">
+            <Link href="/budget-planner">Plan My Buys</Link>
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card className="shadow-sm border-warning/20 bg-warning/5">
+        <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <ReceiptText className="h-5 w-5 text-warning mt-0.5" />
+            <div>
+              <h3 className="font-bold">Accounting Ledger</h3>
+              <p className="text-sm text-muted-foreground">Track purchase price, sale price, fees, profit, and cash tied up in inventory.</p>
+            </div>
+          </div>
+          <Button asChild className="shrink-0">
+            <Link href="/accounting-ledger">Open Ledger</Link>
+          </Button>
+        </CardContent>
+      </Card>
 
       {/* Capture Method Quick-Launch Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, inventoryItemsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, isNull, or } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { toIsoDateTime } from "../lib/date";
 
@@ -28,7 +28,7 @@ router.get("/inventory/best-buys", async (req, res) => {
 router.get("/inventory", async (req, res) => {
   try {
     const { retailer, source_type, store_location, recommendation } = req.query as Record<string, string>;
-    let items = await db.select().from(inventoryItemsTable);
+    let items = await db.select().from(inventoryItemsTable).where(or(eq(inventoryItemsTable.is_deleted, false), isNull(inventoryItemsTable.is_deleted)));
 
     if (retailer) items = items.filter((i) => i.retailer === retailer);
     if (source_type) items = items.filter((i) => i.source_type === source_type);
@@ -127,7 +127,10 @@ router.patch("/inventory/:id", async (req, res) => {
 router.delete("/inventory/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
-    await db.delete(inventoryItemsTable).where(eq(inventoryItemsTable.id, id));
+    await db
+      .update(inventoryItemsTable)
+      .set({ is_deleted: true, deleted_at: new Date(), deleted_by: "local-user", updated_at: new Date() })
+      .where(eq(inventoryItemsTable.id, id));
     res.status(204).send();
   } catch (err) {
     req.log.error({ err }, "Failed to delete inventory item");

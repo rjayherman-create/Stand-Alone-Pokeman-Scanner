@@ -11,7 +11,11 @@ import {
   Settings,
   Menu,
   FileText,
-  Zap
+  Zap,
+  Search,
+  Table2,
+  Calculator,
+  ReceiptText
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -19,10 +23,16 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/quick-scan", label: "Quick Scan", icon: Zap, highlight: true },
+  { href: "/quick-scan", label: "Shelf Scan", icon: Camera },
+  { href: "/comp-lookup", label: "Deal Hunt", icon: Search },
+  { href: "/comp-lookup", label: "Comp Lookup", icon: Search },
+  { href: "/budget-planner", label: "Budget Planner", icon: Calculator },
   { href: "/photo-scan", label: "Photo Scan", icon: Camera },
   { href: "/upload-screenshot", label: "Upload Screenshot", icon: Upload },
   { href: "/web-check", label: "Check Online", icon: Globe },
   { href: "/inventory", label: "Inventory", icon: List },
+  { href: "/inventory-spreadsheet", label: "Spreadsheet", icon: Table2 },
+  { href: "/accounting-ledger", label: "Accounting Ledger", icon: ReceiptText },
   { href: "/store-comparison", label: "Store Comparison", icon: Map },
   { href: "/watchlist", label: "Watchlist", icon: Bookmark },
   { href: "/listing-generator", label: "Listing Generator", icon: FileText },
@@ -47,10 +57,13 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const NavLinks = () => (
     <nav className="flex flex-col gap-1 w-full">
       {navItems.map((item) => {
-        const isActive = location === item.href || (item.href === "/listing-generator" && location.startsWith("/listing-generator/"));
+        const isActive = location === item.href ||
+          (item.href === "/listing-generator" && location.startsWith("/listing-generator/")) ||
+          (item.href === "/comp-lookup" && (location.startsWith("/comp-details/") || location.startsWith("/manual-comp-entry/"))) ||
+          (item.href === "/inventory-spreadsheet" && location.startsWith("/inventory-trash"));
         const Icon = item.icon;
         return (
-          <Link key={item.href} href={item.href} className="w-full">
+          <Link key={`${item.href}-${item.label}`} href={item.href} className="w-full">
             <Button
               variant={isActive ? "secondary" : "ghost"}
               className={`w-full justify-start ${

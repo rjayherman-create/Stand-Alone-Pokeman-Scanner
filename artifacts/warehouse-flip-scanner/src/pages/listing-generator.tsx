@@ -35,7 +35,7 @@ interface FacebookListing {
 
 export default function ListingGenerator() {
   const params = useParams<{ itemId: string }>();
-  const itemId = parseInt(params.itemId ?? "0");
+  const itemId = params.itemId ? parseInt(params.itemId, 10) : null;
   const { data: allItems, isLoading, isError } = useListInventory();
   const [listing, setListing] = useState<FacebookListing | null>(null);
   const [editedText, setEditedText] = useState("");
@@ -43,7 +43,8 @@ export default function ListingGenerator() {
   const generateListing = useGenerateListing();
   const { toast } = useToast();
 
-  const item = (allItems as unknown as InventoryItem[] | undefined)?.find(i => i.id === itemId);
+  const items = (allItems as unknown as InventoryItem[] | undefined) ?? [];
+  const item = itemId ? items.find(i => i.id === itemId) : undefined;
 
   useEffect(() => {
     if (item && !listing) {
@@ -105,7 +106,62 @@ export default function ListingGenerator() {
     );
   }
 
-  if (isError || (!isLoading && !item)) {
+  if (isError) {
+    return (
+      <div className="max-w-2xl mx-auto text-center p-8">
+        <AlertCircle className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+        <h2 className="font-bold text-lg">Could not load inventory</h2>
+        <Button className="mt-4" asChild><Link href="/inventory">Back to Inventory</Link></Button>
+      </div>
+    );
+  }
+
+  if (!itemId) {
+    return (
+      <div className="max-w-3xl mx-auto space-y-6">
+        <div>
+          <h2 className="text-xl font-bold text-primary">Listing Generator</h2>
+          <p className="text-sm text-muted-foreground mt-1">Choose an inventory item to generate a Marketplace listing.</p>
+        </div>
+
+        {items.length > 0 ? (
+          <Card className="shadow-sm">
+            <CardContent className="p-0 divide-y divide-border">
+              {items.slice(0, 12).map((inventoryItem) => (
+                <Link key={inventoryItem.id} href={`/listing-generator/${inventoryItem.id}`}>
+                  <div className="p-4 flex items-center justify-between gap-4 hover:bg-muted/40 cursor-pointer transition-colors">
+                    <div className="min-w-0">
+                      <p className="font-semibold truncate">{inventoryItem.product_name}</p>
+                      <p className="text-sm text-muted-foreground truncate">
+                        {inventoryItem.retailer ?? "Costco"} - {inventoryItem.store_location ?? "Unknown store"} - ${inventoryItem.price ?? "-"}
+                      </p>
+                    </div>
+                    <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                  </div>
+                </Link>
+              ))}
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="shadow-sm">
+            <CardContent className="p-8 text-center space-y-4">
+              <FileText className="mx-auto h-10 w-10 text-muted-foreground" />
+              <div>
+                <h3 className="font-bold">No inventory items yet</h3>
+                <p className="text-sm text-muted-foreground mt-1">Add or scan an item first, then generate its listing.</p>
+              </div>
+              <div className="flex flex-col sm:flex-row justify-center gap-2">
+                <Button asChild><Link href="/quick-scan">Quick Scan</Link></Button>
+                <Button variant="outline" asChild><Link href="/manual-add">Manual Add</Link></Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    );
+  }
+
+  if (!item) {
     return (
       <div className="max-w-2xl mx-auto text-center p-8">
         <AlertCircle className="mx-auto h-12 w-12 text-muted-foreground mb-4" />

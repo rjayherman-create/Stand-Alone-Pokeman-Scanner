@@ -18,6 +18,13 @@ import ListingGenerator from "@/pages/listing-generator";
 import Watchlist from "@/pages/watchlist";
 import Settings from "@/pages/settings";
 import QuickScan from "@/pages/quick-scan";
+import CompLookup from "@/pages/comp-lookup";
+import CompDetails from "@/pages/comp-details";
+import ManualCompEntry from "@/pages/manual-comp-entry";
+import InventorySpreadsheetPage from "@/pages/inventory-spreadsheet";
+import TrashViewPage from "@/pages/inventory-trash";
+import BudgetPlanner from "@/pages/budget-planner";
+import AccountingLedgerPage from "@/pages/accounting-ledger";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -35,13 +42,21 @@ function Router() {
         <Route path="/" component={() => <Redirect to="/dashboard" />} />
         <Route path="/dashboard" component={Dashboard} />
         <Route path="/quick-scan" component={QuickScan} />
+        <Route path="/comp-lookup" component={CompLookup} />
+        <Route path="/budget-planner" component={BudgetPlanner} />
         <Route path="/photo-scan" component={PhotoScan} />
         <Route path="/web-check" component={WebCheck} />
         <Route path="/upload-screenshot" component={UploadScreenshot} />
         <Route path="/manual-add" component={ManualAdd} />
         <Route path="/inventory" component={Inventory} />
+        <Route path="/inventory-spreadsheet" component={InventorySpreadsheetPage} />
+        <Route path="/inventory-trash" component={TrashViewPage} />
+        <Route path="/accounting-ledger" component={AccountingLedgerPage} />
         <Route path="/store-comparison" component={StoreComparison} />
         <Route path="/flip-decision/:itemId" component={FlipDecision} />
+        <Route path="/comp-details/:itemId" component={CompDetails} />
+        <Route path="/manual-comp-entry/:itemId" component={ManualCompEntry} />
+        <Route path="/listing-generator" component={ListingGenerator} />
         <Route path="/listing-generator/:itemId" component={ListingGenerator} />
         <Route path="/watchlist" component={Watchlist} />
         <Route path="/settings" component={Settings} />

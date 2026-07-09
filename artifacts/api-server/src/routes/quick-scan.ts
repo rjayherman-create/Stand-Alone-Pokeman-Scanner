@@ -3,6 +3,7 @@ import multer from "multer";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { db, inventoryItemsTable, quickScanResultsTable, quickScanSessionsTable } from "@workspace/db";
 import { lookupEbayComps } from "../lib/ebay";
+import { performCompLookup } from "../lib/comp-lookup";
 import {
   buildCompSummary,
   calculateProfit,
@@ -149,19 +150,50 @@ Return JSON with EXACTLY these fields:
       extraction_confidence: extracted.confidence ? String(extracted.confidence) : null,
     };
 
-    // ── Step 2: eBay comp lookup ──
-    const ebayData = await lookupEbayComps({
-      upc: scannedItem.upc ?? scannedItem.gtin,
-      model_number: scannedItem.model_number,
-      product_name: scannedItem.product_name,
-      brand: scannedItem.brand,
-      category: scannedItem.category,
-    });
+    // ── Step 2: Comp Lookup (eBay first, Amazon reference-only, Facebook estimate) ──
+    const fullCompLookup = await performCompLookup(scannedItem);
 
-    // ── Step 3: Build comp summary + profit ──
-    const compSummary = buildCompSummary(scannedItem, ebayData);
-    const profitSummary = calculateProfit(scannedItem, compSummary);
-    const quickDecision = makeQuickDecision(scannedItem, compSummary, profitSummary);
+    // ── Step 3: Map shared comp lookup into the existing Quick Scan response shape ──
+    const compSummary = {
+      ebay_active_median: fullCompLookup.compSummary.ebay_active_median,
+      ebay_sold_median: fullCompLookup.compSummary.ebay_sold_median,
+      ebay_active_low: fullCompLookup.ebayData.active_low,
+      ebay_active_high: fullCompLookup.ebayData.active_high,
+      ebay_active_count: fullCompLookup.ebayData.active_count,
+      ebay_match_confidence: fullCompLookup.ebayData.match_confidence,
+      ebay_matched_title: fullCompLookup.ebayData.matched_title,
+      ebay_matched_url: fullCompLookup.ebayData.matched_url,
+      ebay_search_method: fullCompLookup.ebayData.search_method,
+      ebay_shipping_median: fullCompLookup.ebayData.shipping_median,
+      ebay_available: fullCompLookup.ebayData.status === "success",
+      ebay_unavailable_reason: fullCompLookup.ebayData.status === "success" ? undefined : fullCompLookup.ebayData.notes,
+      amazon_current_price: fullCompLookup.amazonData.current_price,
+      amazon_30_day_average: fullCompLookup.amazonData.avg_30_day,
+      amazon_90_day_average: fullCompLookup.amazonData.avg_90_day,
+      amazon_available: fullCompLookup.amazonData.status === "success",
+      estimated_local_facebook_sale_price: fullCompLookup.compSummary.expected_facebook_sale_price,
+      suggested_facebook_list_price: fullCompLookup.compSummary.suggested_facebook_list_price,
+      comp_confidence: fullCompLookup.decision.confidence_score,
+      comp_notes: [
+        fullCompLookup.facebookEstimate.notes,
+        fullCompLookup.amazonData.notes,
+        ...fullCompLookup.compSummary.warning_notes,
+      ].join(" "),
+      comp_lookup: fullCompLookup,
+    };
+    const profitSummary = {
+      store_price: scannedItem.current_store_price ?? scannedItem.clearance_price ?? 0,
+      expected_sale_price: fullCompLookup.compSummary.expected_facebook_sale_price,
+      gross_spread: fullCompLookup.profitSummary.gross_spread,
+      estimated_net_profit: fullCompLookup.profitSummary.estimated_net_profit,
+      profit_margin_percent: fullCompLookup.profitSummary.profit_margin_percent,
+      negotiation_floor: fullCompLookup.profitSummary.negotiation_floor,
+      max_buy_price: fullCompLookup.profitSummary.max_buy_price,
+      recommended_quantity: fullCompLookup.profitSummary.recommended_quantity,
+      category_min_profit: scannedItem.category === "LEGO" || scannedItem.category === "Toys" ? 7 : 10,
+      meets_minimum: (fullCompLookup.profitSummary.estimated_net_profit ?? 0) >= (scannedItem.category === "LEGO" || scannedItem.category === "Toys" ? 7 : 10),
+    };
+    const quickDecision = fullCompLookup.decision;
 
     // ── Step 4: Save result to quick_scan_results table ──
     const [savedResult] = await db

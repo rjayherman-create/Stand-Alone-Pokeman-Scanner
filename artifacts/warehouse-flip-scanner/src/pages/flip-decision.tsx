@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RecommendationBadge, MarkdownCodeBadge, SourceTypeBadge } from "@/components/shared/badges";
-import { AlertCircle, TrendingUp, ArrowLeft, FileText, Bookmark } from "lucide-react";
+import { AlertCircle, TrendingUp, ArrowLeft, FileText, Bookmark, Search } from "lucide-react";
 import { Link, useParams } from "wouter";
 import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -238,6 +238,16 @@ export default function FlipDecision() {
               <Button asChild>
                 <Link href={`/listing-generator/${item.id}`}>
                   <FileText className="mr-2 h-4 w-4" /> Generate Listing
+                </Link>
+              </Button>
+              <Button variant="outline" asChild>
+                <Link href={`/comp-details/${item.id}`}>
+                  <Search className="mr-2 h-4 w-4" /> Comp Details
+                </Link>
+              </Button>
+              <Button variant="outline" asChild>
+                <Link href={`/manual-comp-entry/${item.id}`}>
+                  <TrendingUp className="mr-2 h-4 w-4" /> Manual Comps
                 </Link>
               </Button>
               <Button variant="outline" asChild>
