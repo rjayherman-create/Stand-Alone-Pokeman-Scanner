@@ -102,9 +102,11 @@ router.get("/store-comparison", async (req, res) => {
 
         for (const store of stores) {
           const storeKey = store.toLowerCase();
-          const match = group.find(
-            (i) => i.store_location?.toLowerCase() === storeKey || i.store_location === store
-          );
+          const match = group.find((i) => {
+            const location = i.store_location;
+            if (!location) return false;
+            return location.toLowerCase() === storeKey || location === store;
+          });
           row[`${storeKey}_price`] = match?.price ?? null;
           row[`${storeKey}_stock`] = match?.stock_status ?? null;
 

@@ -1,5 +1,5 @@
 /**
- * Converts supported date-like values to ISO8601 strings.
+ * Converts supported date-like values to ISO 8601 strings.
  * Returns null when input is missing or cannot be parsed into a valid date.
  */
 export function toIsoDateTime(value: unknown): string | null {
