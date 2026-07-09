@@ -1,5 +1,4 @@
 export {
-  openai,
   detectAudioFormat,
   convertToWav,
   ensureCompatibleFormat,
@@ -11,3 +10,4 @@ export {
   speechToText,
   speechToTextStream,
 } from "./client";
+export { openai } from "../client";
