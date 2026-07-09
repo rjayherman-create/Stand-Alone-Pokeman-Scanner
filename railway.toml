@@ -1,0 +1,14 @@
+# Railway deployment configuration
+# Docs: https://docs.railway.com/reference/config-as-code
+
+[build]
+# Install all workspace deps, build the frontend SPA, then bundle the API server.
+# BASE_PATH=/ tells Vite to serve assets from the root path.
+buildCommand = "pnpm install --frozen-lockfile && BASE_PATH=/ pnpm --filter @workspace/warehouse-flip-scanner run build && pnpm --filter @workspace/api-server run build"
+
+[deploy]
+# The Express server serves both the API (/api/*) and the pre-built frontend SPA.
+startCommand = "NODE_ENV=production node --enable-source-maps artifacts/api-server/dist/index.mjs"
+healthcheckPath = "/api/healthz"
+healthcheckTimeout = 60
+restartPolicyType = "on_failure"
