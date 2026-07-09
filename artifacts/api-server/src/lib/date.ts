@@ -1,20 +1,18 @@
-const EPOCH_ISO = new Date(0).toISOString();
-
-export function toIsoDateTime(value: unknown): string {
+export function toIsoDateTime(value: unknown): string | null {
   if (value instanceof Date) {
     const timestamp = value.getTime();
-    return Number.isNaN(timestamp) ? EPOCH_ISO : value.toISOString();
+    return Number.isNaN(timestamp) ? null : value.toISOString();
   }
 
   if (typeof value === "string") {
     const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? EPOCH_ISO : parsed.toISOString();
+    return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
   }
 
   if (typeof value === "number") {
     const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? EPOCH_ISO : parsed.toISOString();
+    return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
   }
 
-  return EPOCH_ISO;
+  return null;
 }
