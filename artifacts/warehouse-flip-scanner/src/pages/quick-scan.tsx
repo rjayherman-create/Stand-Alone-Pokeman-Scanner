@@ -160,7 +160,7 @@ export default function QuickScan() {
 
   const quickScanMutation = useMutation({
     mutationFn: async (formData: FormData) => {
-      const response = await fetch(`${import.meta.env.BASE_URL}api/quick-scan`, {
+      const response = await fetch(`/api/quick-scan`, {
         method: "POST",
         body: formData,
       });
@@ -171,7 +171,7 @@ export default function QuickScan() {
 
   const saveQuickScanMutation = useMutation({
     mutationFn: async (data: Record<string, unknown>) => {
-      const response = await fetch(`${import.meta.env.BASE_URL}api/save-quick-scan`, {
+      const response = await fetch(`/api/save-quick-scan`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
