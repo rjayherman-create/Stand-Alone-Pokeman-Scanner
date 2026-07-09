@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { db, inventoryItemsTable } from "@workspace/db";
+import { toIsoDateTime } from "../lib/date";
 
 const router = Router();
 
@@ -53,13 +54,17 @@ router.get("/dashboard/summary", async (req, res) => {
       screenshot_count,
       manual_count,
       highest_profit_item: highest_profit_item
-        ? { ...highest_profit_item, created_at: highest_profit_item.created_at.toISOString(), updated_at: highest_profit_item.updated_at.toISOString() }
+        ? {
+            ...highest_profit_item,
+            created_at: toIsoDateTime(highest_profit_item.created_at),
+            updated_at: toIsoDateTime(highest_profit_item.updated_at),
+          }
         : null,
       cheapest_store,
       recent_items: recent_items.map((i) => ({
         ...i,
-        created_at: i.created_at.toISOString(),
-        updated_at: i.updated_at.toISOString(),
+        created_at: toIsoDateTime(i.created_at),
+        updated_at: toIsoDateTime(i.updated_at),
       })),
     });
   } catch (err) {
@@ -98,7 +103,7 @@ router.get("/store-comparison", async (req, res) => {
         for (const store of stores) {
           const storeKey = store.toLowerCase();
           const match = group.find(
-            (i) => i.store_location.toLowerCase() === storeKey || i.store_location === store
+            (i) => i.store_location?.toLowerCase() === storeKey || i.store_location === store
           );
           row[`${storeKey}_price`] = match?.price ?? null;
           row[`${storeKey}_stock`] = match?.stock_status ?? null;

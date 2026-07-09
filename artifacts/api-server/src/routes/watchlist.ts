@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { db, watchlistItemsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import { toIsoDateTime } from "../lib/date";
 
 const router = Router();
 
@@ -77,8 +78,8 @@ router.delete("/watchlist/:id", async (req, res) => {
 function serializeItem(item: typeof watchlistItemsTable.$inferSelect) {
   return {
     ...item,
-    created_at: item.created_at.toISOString(),
-    updated_at: item.updated_at.toISOString(),
+    created_at: toIsoDateTime(item.created_at),
+    updated_at: toIsoDateTime(item.updated_at),
   };
 }
 
