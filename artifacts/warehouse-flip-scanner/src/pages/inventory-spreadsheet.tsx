@@ -83,9 +83,8 @@ const COLUMN_GROUPS = {
 
 const ALL_COLUMNS = Object.values(COLUMN_GROUPS).flat();
 const DEFAULT_VISIBLE = [
-  "created_at", "retailer", "store_location", "source_type", "product_name", "brand", "category",
-  "price", "recommendation", "flip_score", "max_quantity", "suggested_facebook_list_price",
-  "expected_facebook_sale_price", "estimated_profit_per_unit", "comp_confidence", "bought_status", "listed_status", "sold_status", "user_notes",
+  "created_at", "store_location", "source_type", "product_name", "price", "recommendation",
+  "estimated_profit_per_unit", "bought_status", "listed_status", "sold_status",
 ];
 
 const RETAILERS = ["all", "Costco", "Walmart", "Target", "BJ's", "Sam's Club", "Home Depot", "Lowe's", "Other"];
@@ -116,6 +115,7 @@ export default function InventorySpreadsheetPage() {
   const [selected, setSelected] = useState<number[]>([]);
   const [detail, setDetail] = useState<Row | null>(null);
   const [showColumns, setShowColumns] = useState(false);
+  const [viewMode, setViewMode] = useState<"actions" | "table">("actions");
   const [undo, setUndo] = useState<{ ids: number[]; label: string } | null>(null);
   const [filters, setFilters] = useState({
     search: "",
@@ -253,6 +253,8 @@ export default function InventorySpreadsheetPage() {
           <p className="text-sm text-muted-foreground">What you scanned, what to buy, what to skip, and what already sold.</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button variant={viewMode === "actions" ? "default" : "outline"} onClick={() => setViewMode("actions")}>Action View</Button>
+          <Button variant={viewMode === "table" ? "default" : "outline"} onClick={() => setViewMode("table")}>Full Table</Button>
           <Button variant="outline" onClick={() => exportFile("csv")}><Download className="mr-2 h-4 w-4" /> CSV</Button>
           <Button variant="outline" onClick={() => exportFile("excel")}><Download className="mr-2 h-4 w-4" /> Excel</Button>
           <Button variant="outline" asChild><Link href="/inventory-trash"><Trash2 className="mr-2 h-4 w-4" /> Trash</Link></Button>
@@ -312,13 +314,43 @@ export default function InventorySpreadsheetPage() {
         </div>
       )}
 
+      {viewMode === "actions" && (
+        <div className="hidden md:grid md:grid-cols-2 xl:grid-cols-3 gap-3">
+          {rows.map((row) => (
+            <Card key={row.id} className="shadow-sm">
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h3 className="font-semibold truncate" title={row.product_name}>{row.product_name}</h3>
+                    <p className="text-xs text-muted-foreground">{row.retailer} - {row.store_location} - {formatCell("source_type", row.source_type)}</p>
+                  </div>
+                  <RecommendationBadge recommendation={row.recommendation} />
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-sm">
+                  <Metric label="Cost" value={money(row.price ?? row.current_store_price)} />
+                  <Metric label="Profit" value={money(row.estimated_profit_per_unit) || row.estimated_profit || "-"} />
+                  <Metric label="Score" value={String(row.flip_score ?? row.confidence_score ?? "-")} />
+                </div>
+                <NextActionPanel row={row} />
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setDetail(row)}><Eye className="mr-2 h-4 w-4" /> Details</Button>
+                  <Button variant="outline" size="sm" onClick={() => recalculate(row)}>Recalc</Button>
+                  <Button variant="outline" size="sm" asChild><Link href={`/comp-details/${row.id}`}>Comps</Link></Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {viewMode === "table" && (
       <div className="hidden md:block overflow-auto border border-border rounded-lg bg-card">
         <table className="w-full min-w-[1400px] text-sm">
           <thead className="sticky top-0 bg-muted z-[1]">
             <tr>
               <th className="p-2 text-left w-10"><input type="checkbox" checked={rows.length > 0 && selected.length === rows.length} onChange={(e) => setSelected(e.target.checked ? rows.map((r) => r.id) : [])} /></th>
               {visibleColumns.map(([key, label]) => <th key={key} className="p-2 text-left font-semibold whitespace-nowrap">{label}</th>)}
-              <th className="p-2 text-left sticky right-0 bg-muted">Actions</th>
+              <th className="p-2 text-left sticky right-0 bg-muted">Next Action</th>
             </tr>
           </thead>
           <tbody>
@@ -338,6 +370,7 @@ export default function InventorySpreadsheetPage() {
           </tbody>
         </table>
       </div>
+      )}
 
       <div className="md:hidden space-y-3">
         {rows.map((row) => (
@@ -356,6 +389,7 @@ export default function InventorySpreadsheetPage() {
                 <Metric label="Profit" value={money(row.estimated_profit_per_unit) || row.estimated_profit || "-"} />
                 <Metric label="Comps" value={row.comp_confidence ?? "-"} />
               </div>
+              <NextActionPanel row={row} />
               <div className="grid grid-cols-2 gap-2">
                 <Button variant="outline" size="sm" onClick={() => setDetail(row)}><Eye className="mr-2 h-4 w-4" /> Details</Button>
                 <Button variant="outline" size="sm" asChild><Link href={`/listing-generator/${row.id}`}><FileText className="mr-2 h-4 w-4" /> Listing</Link></Button>
@@ -428,9 +462,36 @@ function Metric({ label, value }: { label: string; value: string }) {
   return <div className="rounded bg-muted/40 p-2"><div className="text-xs text-muted-foreground">{label}</div><div className="font-semibold">{value || "-"}</div></div>;
 }
 
-function RowActions({ row, onDetail, onDelete, onRecalculate, onStatus }: { row: Row; onDetail: (row: Row) => void; onDelete: () => void; onRecalculate: () => void; onStatus: (row: Row, status: string) => void }) {
+function getNextAction(row: Row) {
+  const rec = String(row.recommendation ?? "").toUpperCase();
+  if (row.sold_status) return { label: "Review profit", detail: "Sold. Check final profit and cash position.", href: "/accounting-ledger", action: "Ledger" };
+  if (row.listed_status || row.listing_status === "listed") return { label: "Monitor listing", detail: "Listed. Watch interest or plan a price drop.", href: "/sales-pipeline", action: "Pipeline" };
+  if (row.bought_status) return { label: "Generate listing", detail: "Bought. Turn it into a marketplace listing.", href: `/listing-generator/${row.id}`, action: "Listing" };
+  if (rec === "BUY") return { label: "Record purchase", detail: "Good buy candidate. If you bought it, record purchase.", href: `/accounting-ledger?inventory_item_id=${row.id}`, action: "Record" };
+  if (rec === "MAYBE" || rec === "RESEARCH_MORE") return { label: "Compare details", detail: "Needs more confidence before buying.", href: `/comp-details/${row.id}`, action: "Compare" };
+  if (rec === "SKIP") return { label: "Leave skipped", detail: "Low priority. Keep notes or delete later.", href: `/flip-decision/${row.id}`, action: "Review" };
+  return { label: "Decide next", detail: "Run comps or recalculate to choose buy, watch, or skip.", href: `/comp-details/${row.id}`, action: "Decide" };
+}
+
+function NextActionPanel({ row }: { row: Row }) {
+  const next = getNextAction(row);
   return (
-    <div className="flex gap-1">
+    <div className="rounded-md border border-primary/20 bg-primary/5 p-3 flex items-center justify-between gap-3">
+      <div>
+        <p className="text-xs font-bold uppercase tracking-wide text-primary">Next action</p>
+        <p className="text-sm font-semibold">{next.label}</p>
+        <p className="text-xs text-muted-foreground">{next.detail}</p>
+      </div>
+      <Button size="sm" asChild><Link href={next.href}>{next.action}</Link></Button>
+    </div>
+  );
+}
+
+function RowActions({ row, onDetail, onDelete, onRecalculate, onStatus }: { row: Row; onDetail: (row: Row) => void; onDelete: () => void; onRecalculate: () => void; onStatus: (row: Row, status: string) => void }) {
+  const next = getNextAction(row);
+  return (
+    <div className="flex gap-1 items-center">
+      <Button size="sm" variant="secondary" asChild><Link href={next.href}>{next.action}</Link></Button>
       <Button size="icon" variant="ghost" onClick={() => onDetail(row)}><Eye className="h-4 w-4" /></Button>
       <Button size="icon" variant="ghost" asChild><Link href={`/listing-generator/${row.id}`}><FileText className="h-4 w-4" /></Link></Button>
       <Button size="icon" variant="ghost" asChild><Link href={`/comp-details/${row.id}`}><Filter className="h-4 w-4" /></Link></Button>
@@ -448,6 +509,7 @@ function DetailDrawer({ row, onClose, onDelete, onRecalculate, onStatus }: { row
   return (
     <div className="space-y-5">
       <SheetHeader><SheetTitle>{row.product_name}</SheetTitle></SheetHeader>
+      <NextActionPanel row={row} />
       <Section title="Product Summary" items={[["Retailer", row.retailer], ["Store", row.store_location], ["Category", row.category], ["UPC", row.upc], ["Model", row.model_number], ["Price", money(row.price ?? row.current_store_price)]]} />
       <Section title="Quick Decision" items={[["Recommendation", row.recommendation], ["Score", row.flip_score], ["Confidence", row.confidence_score], ["Reason", row.one_sentence_reason], ["Risk", row.risk_warning ?? row.risk_notes]]} />
       <Section title="Profit Breakdown" items={[["FB list", money(row.suggested_facebook_list_price)], ["Expected sale", money(row.expected_facebook_sale_price)], ["Profit", money(row.estimated_profit_per_unit) || row.estimated_profit], ["Margin", row.profit_margin_percent ? `${row.profit_margin_percent}%` : "-"], ["Floor", money(row.negotiation_floor)]]} />

@@ -296,6 +296,12 @@ export default function QuickScan() {
         <p className="text-sm text-muted-foreground mt-1">Scan it. Compare it. Decide fast. <span className="font-semibold text-foreground">Should I put this in my cart right now?</span></p>
       </div>
 
+      <Card className="shadow-sm border-primary/20 bg-primary/5">
+        <CardContent className="p-3 text-sm text-muted-foreground">
+          <span className="font-semibold text-foreground">Use Quick Scan for one item right now.</span> Use Shelf Scan for a whole shelf, Pre-Store Scan before a trip, and Thrift Scan when location/photo evidence matters.
+        </CardContent>
+      </Card>
+
       {/* Session Summary Strip */}
       {session.total > 0 && (
         <div className="flex gap-2 text-xs font-semibold overflow-x-auto pb-1">

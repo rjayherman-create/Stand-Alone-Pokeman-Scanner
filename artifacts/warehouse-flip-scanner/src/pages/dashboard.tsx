@@ -4,36 +4,40 @@ import { RecommendationBadge } from "@/components/shared/badges";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, TrendingUp, AlertCircle, Scan, Keyboard, Globe, Image as ImageIcon, Zap, Table2, Calculator, ReceiptText, PackageCheck } from "lucide-react";
+import { ArrowRight, TrendingUp, AlertCircle, Zap, ReceiptText, PackageCheck, MapPin, Route, Search, ShoppingCart } from "lucide-react";
 
-const CAPTURE_CARDS = [
+const WORKFLOW_CARDS = [
   {
-    href: "/photo-scan",
-    icon: Scan,
-    title: "Scan Photo",
-    desc: "Take a quick in-store photo of a clearance tag, shelf tag, box, barcode, or app screen.",
+    href: "/quick-scan",
+    icon: Zap,
+    title: "Scan in store",
+    desc: "Use Quick Scan when you are standing in front of a product and need a fast BUY / SKIP.",
+    action: "Quick Scan",
+    color: "text-primary",
+  },
+  {
+    href: "/pre-store-scan",
+    icon: Route,
+    title: "Prep a trip",
+    desc: "Paste online finds, score targets, and build a store plan before leaving home.",
+    action: "Pre-Store Scan",
     color: "text-blue-500",
   },
   {
-    href: "/upload-screenshot",
-    icon: ImageIcon,
-    title: "Upload Screenshot",
-    desc: "Upload screenshots from Costco, Walmart, Target, or other store apps.",
-    color: "text-teal-500",
+    href: "/thrift-scan",
+    icon: MapPin,
+    title: "Capture thrift finds",
+    desc: "Save store, address, timestamp, item photos, price, and thrift-specific decision.",
+    action: "Thrift Scan",
+    color: "text-green-600",
   },
   {
-    href: "/web-check",
-    icon: Globe,
-    title: "Check Online",
-    desc: "Try public web checking where allowed and visible.",
-    color: "text-purple-500",
-  },
-  {
-    href: "/manual-add",
-    icon: Keyboard,
-    title: "Manual Add",
-    desc: "Enter item, store, price, and condition manually.",
-    color: "text-slate-500",
+    href: "/inventory-spreadsheet",
+    icon: ShoppingCart,
+    title: "Review next actions",
+    desc: "See what needs buying, listing, watching, or marking sold.",
+    action: "Open Inventory",
+    color: "text-amber-500",
   },
 ];
 
@@ -67,7 +71,7 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold tracking-tight text-primary">Overview</h2>
+        <h2 className="text-2xl font-bold tracking-tight text-primary">Today&apos;s Workflow</h2>
         <Link href="/quick-scan">
           <Button size="sm" className="font-semibold bg-primary hover:bg-primary/90">
             <Zap className="mr-2 h-4 w-4" /> Quick Scan In Store
@@ -75,23 +79,28 @@ export default function Dashboard() {
         </Link>
       </div>
 
-      {/* Quick Scan Hero Card */}
-      <Link href="/quick-scan">
-        <div className="rounded-2xl bg-gradient-to-br from-primary to-primary/80 text-primary-foreground p-5 cursor-pointer hover:opacity-95 transition-opacity shadow-md">
-          <div className="flex items-start justify-between">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <Zap className="h-5 w-5" />
-                <span className="text-xl font-black tracking-tight">Quick Scan In Store</span>
-              </div>
-              <p className="text-sm opacity-90 leading-snug max-w-xs">
-                Scan a shelf tag, barcode, box, clearance sticker, or app screen and get a fast BUY / SKIP decision.
-              </p>
-            </div>
-            <ArrowRight className="h-6 w-6 opacity-70 shrink-0 mt-1" />
-          </div>
-        </div>
-      </Link>
+      <div className="grid md:grid-cols-4 gap-3">
+        {WORKFLOW_CARDS.map((card) => {
+          const Icon = card.icon;
+          return (
+            <Link key={card.href} href={card.href}>
+              <Card className="shadow-sm hover:shadow-md transition-shadow cursor-pointer h-full border-primary/10">
+                <CardContent className="p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <Icon className={`h-5 w-5 ${card.color}`} />
+                    <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                  <div>
+                    <p className="font-bold">{card.title}</p>
+                    <p className="text-xs text-muted-foreground leading-snug mt-1">{card.desc}</p>
+                  </div>
+                  <Button size="sm" variant="outline" className="w-full">{card.action}</Button>
+                </CardContent>
+              </Card>
+            </Link>
+          );
+        })}
+      </div>
 
       {/* Primary Metrics */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -129,125 +138,40 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* Capture Method Quick-Launch Cards */}
-      <Card className="shadow-sm border-primary/20 bg-primary/5">
-        <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <Table2 className="h-5 w-5 text-primary mt-0.5" />
-            <div>
-              <h3 className="font-bold">Analysis Spreadsheet</h3>
-              <p className="text-sm text-muted-foreground">View, edit, delete, filter, and export every scanned item and flip decision.</p>
-            </div>
-          </div>
-          <Button asChild className="shrink-0">
-            <Link href="/inventory-spreadsheet">Open Spreadsheet</Link>
-          </Button>
-        </CardContent>
-      </Card>
-
-      <Card className="shadow-sm border-success/20 bg-success/5">
-        <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <Calculator className="h-5 w-5 text-success mt-0.5" />
-            <div>
-              <h3 className="font-bold">Flip Budget Planner</h3>
-              <p className="text-sm text-muted-foreground">Set your buying budget for today, this week, 2 weeks, or the month and get a smart buy plan.</p>
-            </div>
-          </div>
-          <Button asChild className="shrink-0">
-            <Link href="/budget-planner">Plan My Buys</Link>
-          </Button>
-        </CardContent>
-      </Card>
-
-      <Card className="shadow-sm border-warning/20 bg-warning/5">
-        <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <ReceiptText className="h-5 w-5 text-warning mt-0.5" />
-            <div>
-              <h3 className="font-bold">Accounting Ledger</h3>
-              <p className="text-sm text-muted-foreground">Track purchase price, sale price, fees, profit, and cash tied up in inventory.</p>
-            </div>
-          </div>
-          <Button asChild className="shrink-0">
-            <Link href="/accounting-ledger">Open Ledger</Link>
-          </Button>
-        </CardContent>
-      </Card>
-
-      <Card className="shadow-sm border-primary/20 bg-primary/5">
-        <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <PackageCheck className="h-5 w-5 text-primary mt-0.5" />
-            <div>
-              <h3 className="font-bold">Selling Assistant</h3>
-              <p className="text-sm text-muted-foreground">Turn bought items into ready-to-post listings and track them until sold.</p>
-            </div>
-          </div>
-          <Button asChild className="shrink-0">
-            <Link href="/selling-assistant">Create Listings</Link>
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* Capture Method Quick-Launch Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {CAPTURE_CARDS.map((card) => {
-          const Icon = card.icon;
-          return (
-            <Link key={card.href} href={card.href}>
-              <Card className="shadow-sm hover:shadow-md transition-shadow cursor-pointer h-full">
-                <CardContent className="p-4 space-y-2">
-                  <Icon className={`h-5 w-5 ${card.color}`} />
-                  <p className="font-semibold text-sm">{card.title}</p>
-                  <p className="text-xs text-muted-foreground leading-snug">{card.desc}</p>
-                </CardContent>
-              </Card>
-            </Link>
-          );
-        })}
-      </div>
-
-      {/* Capture breakdown & Insights */}
-      <div className="grid md:grid-cols-2 gap-6">
-        <Card className="shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-base font-semibold">Capture Methods</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Scan className="h-4 w-4 text-blue-500" />
-                  <span className="text-sm font-medium">Photo Scans</span>
-                </div>
-                <span className="font-bold">{summary.photo_scan_count}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Globe className="h-4 w-4 text-purple-500" />
-                  <span className="text-sm font-medium">Online Checks</span>
-                </div>
-                <span className="font-bold">{summary.online_check_count}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <ImageIcon className="h-4 w-4 text-teal-500" />
-                  <span className="text-sm font-medium">Screenshots</span>
-                </div>
-                <span className="font-bold">{summary.screenshot_count}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Keyboard className="h-4 w-4 text-slate-500" />
-                  <span className="text-sm font-medium">Manual Entries</span>
-                </div>
-                <span className="font-bold">{summary.manual_count}</span>
-              </div>
+      <div className="grid md:grid-cols-3 gap-3">
+        <Card className="shadow-sm border-primary/20 bg-primary/5">
+          <CardContent className="p-4 flex items-start gap-3">
+            <Search className="h-5 w-5 text-primary mt-0.5" />
+            <div className="space-y-2">
+              <h3 className="font-bold">Need stronger comps?</h3>
+              <p className="text-sm text-muted-foreground">Run eBay-first comparison before committing cash.</p>
+              <Button asChild size="sm" variant="outline"><Link href="/comp-lookup">Open Price Comps</Link></Button>
             </div>
           </CardContent>
         </Card>
+        <Card className="shadow-sm border-warning/20 bg-warning/5">
+          <CardContent className="p-4 flex items-start gap-3">
+            <PackageCheck className="h-5 w-5 text-warning mt-0.5" />
+            <div className="space-y-2">
+              <h3 className="font-bold">Items ready to sell</h3>
+              <p className="text-sm text-muted-foreground">Turn bought items into listings and move them through pickup or sale.</p>
+              <Button asChild size="sm" variant="outline"><Link href="/selling-assistant">Open Selling</Link></Button>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="shadow-sm border-success/20 bg-success/5">
+          <CardContent className="p-4 flex items-start gap-3">
+            <ReceiptText className="h-5 w-5 text-success mt-0.5" />
+            <div className="space-y-2">
+              <h3 className="font-bold">Cash tied up</h3>
+              <p className="text-sm text-muted-foreground">Record purchases and sales so the profit picture stays honest.</p>
+              <Button asChild size="sm" variant="outline"><Link href="/accounting-ledger">Open Ledger</Link></Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
+      <div className="grid md:grid-cols-2 gap-6">
         {summary.highest_profit_item && (
           <Card className="shadow-sm bg-primary/5 border-primary/20">
             <CardHeader>

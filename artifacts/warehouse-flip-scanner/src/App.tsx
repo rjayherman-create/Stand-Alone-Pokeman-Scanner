@@ -30,6 +30,9 @@ import ListingWorkbenchPage from "@/pages/listing-workbench";
 import SalesPipelinePage from "@/pages/sales-pipeline";
 import PriceMarkdownPlannerPage from "@/pages/price-markdown-planner";
 import BuyerMessageTemplatesPage from "@/pages/buyer-message-templates";
+import ThriftScanPage from "@/pages/thrift-scan";
+import PreStoreScanPage from "@/pages/pre-store-scan";
+import ShelfScanPage from "@/pages/shelf-scan";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -47,6 +50,9 @@ function Router() {
         <Route path="/" component={() => <Redirect to="/dashboard" />} />
         <Route path="/dashboard" component={Dashboard} />
         <Route path="/quick-scan" component={QuickScan} />
+        <Route path="/pre-store-scan" component={PreStoreScanPage} />
+        <Route path="/thrift-scan" component={ThriftScanPage} />
+        <Route path="/shelf-scan" component={ShelfScanPage} />
         <Route path="/comp-lookup" component={CompLookup} />
         <Route path="/budget-planner" component={BudgetPlanner} />
         <Route path="/selling-assistant" component={SellingAssistantPage} />

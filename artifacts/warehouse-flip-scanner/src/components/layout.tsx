@@ -13,25 +13,64 @@ import {
   Calculator,
   ReceiptText,
   PackageCheck,
-  Kanban
+  Kanban,
+  MapPin,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
-const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/quick-scan", label: "Quick Scan", icon: Zap, highlight: true },
-  { href: "/quick-scan", label: "Shelf Scan", icon: Camera },
-  { href: "/comp-lookup", label: "Deal Hunt", icon: Search },
-  { href: "/budget-planner", label: "Budget Planner", icon: Calculator },
-  { href: "/selling-assistant", label: "Selling Assistant", icon: PackageCheck },
-  { href: "/listing-workbench", label: "Listing Workbench", icon: ReceiptText },
-  { href: "/sales-pipeline", label: "Sales Pipeline", icon: Kanban },
-  { href: "/inventory-spreadsheet", label: "Inventory Spreadsheet", icon: Table2 },
-  { href: "/accounting-ledger", label: "Accounting Ledger", icon: ReceiptText },
-  { href: "/store-comparison", label: "Store Comparison", icon: Map },
-  { href: "/watchlist", label: "Watchlist", icon: Bookmark },
-  { href: "/settings", label: "Settings", icon: Settings },
+const navSections = [
+  {
+    title: "Main",
+    items: [
+      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    ],
+  },
+  {
+    title: "Find & Scan",
+    items: [
+      { href: "/quick-scan", label: "Quick Scan", icon: Zap, highlight: true },
+      { href: "/pre-store-scan", label: "Pre-Store Scan", icon: Map },
+      { href: "/thrift-scan", label: "Thrift Scan", icon: MapPin },
+      { href: "/shelf-scan", label: "Shelf Scan", icon: Camera },
+      { href: "/comp-lookup", label: "Deal Hunt", icon: Search },
+    ],
+  },
+  {
+    title: "Research & Compare",
+    items: [
+      { href: "/comp-lookup", label: "Price Comps", icon: Search },
+      { href: "/store-comparison", label: "Store Comparison", icon: Map },
+      { href: "/watchlist", label: "Watchlist", icon: Bookmark },
+    ],
+  },
+  {
+    title: "Buying Plan",
+    items: [
+      { href: "/budget-planner", label: "Budget Planner", icon: Calculator },
+    ],
+  },
+  {
+    title: "Selling",
+    items: [
+      { href: "/selling-assistant", label: "Selling Assistant", icon: PackageCheck },
+      { href: "/listing-workbench", label: "Listing Workbench", icon: ReceiptText },
+      { href: "/sales-pipeline", label: "Sales Pipeline", icon: Kanban },
+    ],
+  },
+  {
+    title: "Inventory & Money",
+    items: [
+      { href: "/inventory-spreadsheet", label: "Inventory Spreadsheet", icon: Table2 },
+      { href: "/accounting-ledger", label: "Accounting Ledger", icon: ReceiptText },
+    ],
+  },
+  {
+    title: "System",
+    items: [
+      { href: "/settings", label: "Settings", icon: Settings },
+    ],
+  },
 ];
 
 function ComplianceFooter() {
@@ -50,35 +89,42 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
 
   const NavLinks = () => (
-    <nav className="flex flex-col gap-1 w-full">
-      {navItems.map((item) => {
-        const isActive = location === item.href ||
-          (item.href === "/listing-generator" && location.startsWith("/listing-generator/")) ||
-          (item.href === "/selling-assistant" && (location.startsWith("/price-markdown-planner") || location.startsWith("/buyer-message-templates"))) ||
-          (item.href === "/comp-lookup" && (location.startsWith("/comp-details/") || location.startsWith("/manual-comp-entry/"))) ||
-          (item.href === "/inventory-spreadsheet" && location.startsWith("/inventory-trash"));
-        const Icon = item.icon;
-        return (
-          <Link key={`${item.href}-${item.label}`} href={item.href} className="w-full">
-            <Button
-              variant={isActive ? "secondary" : "ghost"}
-              className={`w-full justify-start ${
-                isActive
-                  ? "bg-primary/10 text-primary hover:bg-primary/20"
-                  : item.highlight
-                  ? "text-primary font-semibold hover:bg-primary/10"
-                  : ""
-              }`}
-            >
-              <Icon className={`mr-2 h-4 w-4 ${item.highlight && !isActive ? "text-primary" : ""}`} />
-              {item.label}
-              {item.highlight && !isActive && (
-                <span className="ml-auto text-[10px] bg-primary/10 text-primary rounded-full px-1.5 py-0.5 font-bold">NEW</span>
-              )}
-            </Button>
-          </Link>
-        );
-      })}
+    <nav className="flex flex-col gap-4 w-full">
+      {navSections.map((section) => (
+        <div key={section.title} className="space-y-1">
+          <p className="px-3 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+            {section.title}
+          </p>
+          {section.items.map((item) => {
+            const isActive = location === item.href ||
+              (item.href === "/listing-generator" && location.startsWith("/listing-generator/")) ||
+              (item.href === "/selling-assistant" && (location.startsWith("/price-markdown-planner") || location.startsWith("/buyer-message-templates"))) ||
+              (item.href === "/comp-lookup" && (location.startsWith("/comp-details/") || location.startsWith("/manual-comp-entry/"))) ||
+              (item.href === "/inventory-spreadsheet" && location.startsWith("/inventory-trash"));
+            const Icon = item.icon;
+            return (
+              <Link key={`${section.title}-${item.href}-${item.label}`} href={item.href} className="w-full">
+                <Button
+                  variant={isActive ? "secondary" : "ghost"}
+                  className={`w-full justify-start ${
+                    isActive
+                      ? "bg-primary/10 text-primary hover:bg-primary/20"
+                      : item.highlight
+                      ? "text-primary font-semibold hover:bg-primary/10"
+                      : ""
+                  }`}
+                >
+                  <Icon className={`mr-2 h-4 w-4 ${item.highlight && !isActive ? "text-primary" : ""}`} />
+                  {item.label}
+                  {item.highlight && !isActive && (
+                    <span className="ml-auto text-[10px] bg-primary/10 text-primary rounded-full px-1.5 py-0.5 font-bold">NEW</span>
+                  )}
+                </Button>
+              </Link>
+            );
+          })}
+        </div>
+      ))}
     </nav>
   );
 
@@ -89,7 +135,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         <div className="p-4 border-b border-border">
           <h1 className="font-bold text-lg text-primary tracking-tight">Retail Flip Scanner</h1>
           <p className="text-xs text-muted-foreground mt-1 leading-tight">
-            Find clearance deals worth flipping on Facebook Marketplace.
+            Find clearance deals worth flipping.
           </p>
         </div>
         <div className="p-4 flex-1">

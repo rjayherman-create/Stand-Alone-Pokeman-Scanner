@@ -222,6 +222,21 @@ function buildStoreTripPlan(items: Array<typeof preStoreScanItemsTable.$inferSel
   };
 }
 
+router.get("/pre-store-scan", async (_req, res) => {
+  const sessions = await db.select().from(preStoreScanSessionsTable);
+  sessions.sort((a, b) => b.id - a.id);
+  const recent = sessions.slice(0, 12);
+  const sessionsWithItems = await Promise.all(recent.map(async (session) => {
+    const items = await db.select().from(preStoreScanItemsTable).where(eq(preStoreScanItemsTable.pre_store_scan_session_id, session.id));
+    return {
+      ...serializeSession(session),
+      items: items.map(serializeItem),
+      trip_plan: session.trip_plan_json ?? (items.length ? buildStoreTripPlan(items) : null),
+    };
+  }));
+  res.json({ sessions: sessionsWithItems });
+});
+
 router.post("/pre-store-scan/start", async (req, res) => {
   const stores = Array.isArray(req.body.selected_stores) ? req.body.selected_stores : [];
   const [session] = await db.insert(preStoreScanSessionsTable).values({
@@ -339,12 +354,15 @@ router.post("/pre-store-scan/add-to-watchlist", async (req, res) => {
   const ids = Array.isArray(req.body.item_ids) ? req.body.item_ids.map(Number) : [Number(req.body.item_id)];
   const items = await db.select().from(preStoreScanItemsTable).where(inArray(preStoreScanItemsTable.id, ids));
   const inserted = items.length ? await db.insert(watchlistItemsTable).values(items.map((item) => ({
-    retailer: item.retailer,
+    item_number: item.item_number ?? item.upc ?? item.sku ?? item.dpci ?? item.tcin ?? `prestore-${item.id}`,
     product_name: item.product_name,
-    target_price: item.target_buy_price,
-    current_price: item.online_price ?? item.in_store_price,
-    source_url: null,
+    desired_buy_price: item.target_buy_price,
+    target_resale_price: item.expected_facebook_sale_price,
+    stores_to_watch: item.store_location,
     notes: item.risk_notes,
+    last_seen_price: item.online_price ?? item.in_store_price,
+    last_seen_store: item.store_location,
+    last_seen_at: item.last_seen_at,
   }))).returning() : [];
   res.status(201).json({ items: inserted });
 });
