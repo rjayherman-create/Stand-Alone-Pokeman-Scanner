@@ -12,6 +12,7 @@ import accountingLedgerRouter from "./accounting-ledger";
 import sellingAssistantRouter from "./selling-assistant";
 import preStoreScanRouter from "./pre-store-scan";
 import thriftScanRouter from "./thrift-scan";
+import pokemonMarketRouter from "./pokemon-market";
 
 const router: IRouter = Router();
 
@@ -28,5 +29,6 @@ router.use(accountingLedgerRouter);
 router.use(sellingAssistantRouter);
 router.use(preStoreScanRouter);
 router.use(thriftScanRouter);
+router.use(pokemonMarketRouter);
 
 export default router;

@@ -1,9 +1,9 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Bell, Box, Camera, ChevronRight, CircleDollarSign, Clock3, Gauge,
-  LayoutDashboard, LineChart, PackagePlus, Search, ShieldCheck, Sparkles,
-  Target, TrendingUp, Upload, WalletCards
+  LayoutDashboard, LineChart, PackagePlus, RefreshCw, Search, ShieldCheck,
+  Sparkles, Target, TrendingUp, Upload, WalletCards
 } from "lucide-react";
 import "./styles.css";
 
@@ -11,9 +11,24 @@ type Signal = "HOLD" | "WATCH" | "SELL";
 type Item = {
   id: number; name: string; type: string; qty: number; cost: number;
   value: number; trend: number; signal: Signal; target: number; note: string;
+  checkedAt?: string | null; sourceStatus?: string;
 };
 
-const inventory: Item[] = [
+type ApiItem = {
+  id: number;
+  product_name: string;
+  subcategory?: string | null;
+  price?: number | null;
+  current_store_price?: number | null;
+  normal_retail_estimate?: number | null;
+  expected_facebook_sale_price?: number | null;
+  recommendation?: string | null;
+  quantity?: number | null;
+  analysis_json?: Record<string, unknown> | null;
+  updated_at?: string | null;
+};
+
+const seedInventory: Item[] = [
   { id: 1, name: "Pitch Black Elite Trainer Box", type: "Elite Trainer Box", qty: 1, cost: 65.17, value: 84, trend: 8.2, signal: "HOLD", target: 99, note: "Strongest sealed hold in this purchase." },
   { id: 2, name: "Chaos Rising Elite Trainer Box", type: "Elite Trainer Box", qty: 1, cost: 65.17, value: 70, trend: 4.6, signal: "HOLD", target: 85, note: "Hold while retail supply remains active." },
   { id: 3, name: "Mega Greninja ex Premium Collection", type: "Premium Collection", qty: 1, cost: 48.85, value: 52, trend: 2.1, signal: "WATCH", target: 70, note: "Bulky product; sell sooner if local demand strengthens." },
@@ -24,17 +39,85 @@ const inventory: Item[] = [
 ];
 
 const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+const numberValue = (value: unknown, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
+
+function mapApiItem(item: ApiItem): Item {
+  const analysis = item.analysis_json ?? {};
+  const quotes = Array.isArray(analysis.marketQuotes) ? analysis.marketQuotes as Array<{ value?: number | null }> : [];
+  const quoteValues = quotes.map(q => numberValue(q.value, NaN)).filter(Number.isFinite);
+  const marketValue = numberValue(item.normal_retail_estimate, quoteValues.length ? quoteValues.reduce((a, b) => a + b, 0) / quoteValues.length : numberValue(item.expected_facebook_sale_price));
+  const cost = numberValue(item.price ?? item.current_store_price);
+  const recommendation = String(item.recommendation ?? "HOLD").toUpperCase();
+  const signal: Signal = recommendation.includes("SELL") ? "SELL" : recommendation.includes("WATCH") ? "WATCH" : "HOLD";
+  return {
+    id: item.id,
+    name: item.product_name,
+    type: item.subcategory || "Pokémon sealed product",
+    qty: Math.max(1, numberValue(item.quantity, 1)),
+    cost,
+    value: marketValue,
+    trend: numberValue(analysis.trend30Day, 0),
+    signal,
+    target: numberValue(analysis.targetPrice, marketValue ? marketValue * 1.25 : cost * 1.35),
+    note: String(analysis.marketNote ?? "Live value is calculated from available supported market sources."),
+    checkedAt: String(analysis.marketCheckedAt ?? item.updated_at ?? "") || null,
+    sourceStatus: quotes.length ? `${quoteValues.length}/${quotes.length} sources reporting` : "No live source check yet",
+  };
+}
 
 function App() {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState("Dashboard");
-  const filtered = useMemo(() => inventory.filter(i => i.name.toLowerCase().includes(query.toLowerCase())), [query]);
+  const [inventory, setInventory] = useState<Item[]>(seedInventory);
+  const [dataMode, setDataMode] = useState<"loading" | "database" | "sample" | "error">("loading");
+  const [refreshing, setRefreshing] = useState(false);
+  const [message, setMessage] = useState("Connecting to PostgreSQL…");
+
+  const loadPortfolio = async () => {
+    try {
+      const response = await fetch("/api/pokemon/portfolio", { headers: { Accept: "application/json" } });
+      if (!response.ok) throw new Error(`Portfolio API returned ${response.status}`);
+      const json = await response.json() as { items?: ApiItem[] };
+      const items = (json.items ?? []).map(mapApiItem);
+      if (items.length) {
+        setInventory(items);
+        setDataMode("database");
+        setMessage(`${items.length} products loaded from PostgreSQL.`);
+      } else {
+        setDataMode("sample");
+        setMessage("Database is connected, but no Pokémon inventory has been saved yet. Showing sample portfolio.");
+      }
+    } catch (error) {
+      setDataMode("error");
+      setMessage(error instanceof Error ? `Database connection unavailable: ${error.message}` : "Database connection unavailable.");
+    }
+  };
+
+  useEffect(() => { void loadPortfolio(); }, []);
+
+  const refreshMarket = async () => {
+    const liveItems = dataMode === "database" ? inventory : [];
+    if (!liveItems.length) {
+      setMessage("Save Pokémon inventory to PostgreSQL before running live market checks.");
+      return;
+    }
+    setRefreshing(true);
+    setMessage("Checking supported live market sources…");
+    const results = await Promise.allSettled(liveItems.map(item => fetch(`/api/pokemon/market-check/${item.id}`, { method: "POST" })));
+    const successful = results.filter(result => result.status === "fulfilled" && result.value.ok).length;
+    await loadPortfolio();
+    setRefreshing(false);
+    setMessage(`Market check finished for ${successful} of ${liveItems.length} products. Mercari requires manual verified comparisons.`);
+  };
+
+  const filtered = useMemo(() => inventory.filter(i => i.name.toLowerCase().includes(query.toLowerCase())), [inventory, query]);
   const totals = useMemo(() => {
     const invested = inventory.reduce((s, i) => s + i.cost, 0);
     const market = inventory.reduce((s, i) => s + i.value, 0);
     const onlineNet = market * .86;
-    return { invested, market, onlineNet, gain: market - invested, roi: ((market - invested) / invested) * 100 };
-  }, []);
+    const gain = market - invested;
+    return { invested, market, onlineNet, gain, roi: invested ? (gain / invested) * 100 : 0 };
+  }, [inventory]);
 
   const nav = [
     ["Dashboard", LayoutDashboard], ["Add Purchase", PackagePlus], ["Scan Receipt", Camera],
@@ -46,41 +129,45 @@ function App() {
     <aside className="sidebar">
       <div className="brand"><div className="brand-mark">PV</div><div><strong>PokéVault</strong><span>Investment Tracker</span></div></div>
       <nav>{nav.map(([label, Icon]) => <button key={label} className={active===label?"active":""} onClick={()=>setActive(label)}><Icon size={18}/><span>{label}</span></button>)}</nav>
-      <div className="side-card"><ShieldCheck size={20}/><div><b>Portfolio protected</b><span>7 products · 8 sealed units</span></div></div>
+      <div className="side-card"><ShieldCheck size={20}/><div><b>{dataMode === "database" ? "Database connected" : "Connection check"}</b><span>{inventory.length} products in view</span></div></div>
     </aside>
 
     <main>
       <header>
-        <div><p className="eyebrow">POKÉMON SEALED PORTFOLIO</p><h1>{active}</h1><p>Track cost, value, market momentum, and the best time to sell.</p></div>
-        <div className="header-actions"><button className="ghost"><Upload size={17}/>Import receipt</button><button className="primary"><Camera size={17}/>Scan purchase</button></div>
+        <div><p className="eyebrow">POKÉMON SEALED PORTFOLIO</p><h1>{active}</h1><p>{message}</p></div>
+        <div className="header-actions">
+          <button className="ghost"><Upload size={17}/>Import receipt</button>
+          <button className="ghost" onClick={()=>void refreshMarket()} disabled={refreshing}><RefreshCw size={17} className={refreshing?"spin":""}/>{refreshing?"Checking…":"Check market now"}</button>
+          <button className="primary"><Camera size={17}/>Scan purchase</button>
+        </div>
       </header>
 
       <section className="hero">
-        <div><span className="live-pill"><Sparkles size={14}/> Portfolio updated today</span><h2>Your collection is up <em>{totals.roi.toFixed(1)}%</em></h2><p>Current gross appreciation is {money(totals.gain)}. Two products are approaching their target selling range.</p><div className="hero-actions"><button className="light">Review sell signals <ChevronRight size={16}/></button><button className="transparent">Set investment strategy</button></div></div>
+        <div><span className="live-pill"><Sparkles size={14}/> {dataMode === "database" ? "PostgreSQL portfolio" : "Sample portfolio"}</span><h2>Your collection is up <em>{totals.roi.toFixed(1)}%</em></h2><p>Current gross appreciation is {money(totals.gain)}. Live checks use supported official sources and store the latest valuation back in the database.</p><div className="hero-actions"><button className="light">Review sell signals <ChevronRight size={16}/></button><button className="transparent">Set investment strategy</button></div></div>
         <div className="score"><span>Portfolio score</span><strong>78</strong><small>Healthy hold</small></div>
       </section>
 
       <section className="metrics">
-        <Metric icon={<CircleDollarSign/>} label="Total invested" value={money(totals.invested)} sub="Including allocated tax"/>
-        <Metric icon={<TrendingUp/>} label="Gross market value" value={money(totals.market)} sub={`+${money(totals.gain)} unrealized`}/>
+        <Metric icon={<CircleDollarSign/>} label="Total invested" value={money(totals.invested)} sub="Loaded from inventory cost"/>
+        <Metric icon={<TrendingUp/>} label="Gross market value" value={money(totals.market)} sub={`${money(totals.gain)} unrealized`}/>
         <Metric icon={<WalletCards/>} label="Estimated online net" value={money(totals.onlineNet)} sub="After modeled selling costs"/>
-        <Metric icon={<Clock3/>} label="Next review" value="Jan 21, 2027" sub="Six-month portfolio check"/>
+        <Metric icon={<Clock3/>} label="Data mode" value={dataMode === "database" ? "Live DB" : "Sample"} sub="Use Check market now to refresh"/>
       </section>
 
       <section className="content-grid">
         <div className="panel portfolio-panel">
-          <div className="panel-head"><div><h3>My sealed inventory</h3><p>Exact products from your Target purchase</p></div><div className="search"><Search size={16}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search products"/></div></div>
-          <div className="table-wrap"><table><thead><tr><th>Product</th><th>Cost</th><th>Market</th><th>30-day</th><th>Target</th><th>Signal</th></tr></thead><tbody>
-            {filtered.map(item => <tr key={item.id}><td><div className="product"><div className="product-art">{item.name.slice(0,2).toUpperCase()}</div><div><b>{item.name}</b><span>{item.type}{item.qty>1?` · Qty ${item.qty}`:""}</span></div></div></td><td>{money(item.cost)}</td><td><b>{money(item.value)}</b></td><td className="positive">+{item.trend}%</td><td>{money(item.target)}</td><td><span className={`signal ${item.signal.toLowerCase()}`}>{item.signal}</span></td></tr>)}
+          <div className="panel-head"><div><h3>My sealed inventory</h3><p>PostgreSQL inventory with current valuation status</p></div><div className="search"><Search size={16}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search products"/></div></div>
+          <div className="table-wrap"><table><thead><tr><th>Product</th><th>Cost</th><th>Market</th><th>Sources</th><th>Target</th><th>Signal</th></tr></thead><tbody>
+            {filtered.map(item => <tr key={item.id}><td><div className="product"><div className="product-art">{item.name.slice(0,2).toUpperCase()}</div><div><b>{item.name}</b><span>{item.type}{item.qty>1?` · Qty ${item.qty}`:""}</span></div></div></td><td>{money(item.cost)}</td><td><b>{money(item.value)}</b></td><td><span>{item.sourceStatus}</span></td><td>{money(item.target)}</td><td><span className={`signal ${item.signal.toLowerCase()}`}>{item.signal}</span></td></tr>)}
           </tbody></table></div>
         </div>
 
         <aside className="right-column">
-          <div className="panel signal-card"><div className="panel-head"><div><h3>Top sell opportunity</h3><p>Based on current portfolio data</p></div><span className="signal watch">WATCH</span></div><h4>Pitch Black Binacle 3-Pack</h4><div className="signal-price"><strong>$28</strong><span>Target $38</span></div><div className="progress"><i style={{width:"74%"}}/></div><ul><li>Up 9.8% over 30 days</li><li>Compact and inexpensive to ship</li><li>Wait for another $8–$10 of appreciation</li></ul><button className="full">Open sell analysis</button></div>
-          <div className="panel alert-list"><div className="panel-head"><div><h3>Recent alerts</h3><p>Market conditions worth reviewing</p></div></div>
-            <Alert title="Booster Bundle momentum increased" time="2 hours ago"/>
-            <Alert title="Greninja collection is under target" time="Yesterday"/>
-            <Alert title="Six-month review dates created" time="Jul 21"/>
+          <div className="panel signal-card"><div className="panel-head"><div><h3>Valuation sources</h3><p>Supported current market checks</p></div><span className="signal watch">LIVE</span></div><h4>Source rules</h4><ul><li>TCGplayer official market pricing when product IDs and keys exist</li><li>PriceCharting official guide pricing when product IDs and token exist</li><li>eBay active-listing median including visible shipping</li><li>Mercari entered as verified manual comparables because no supported public pricing API is available</li></ul><button className="full" onClick={()=>void refreshMarket()}>Refresh all products</button></div>
+          <div className="panel alert-list"><div className="panel-head"><div><h3>Connection status</h3><p>Database and source diagnostics</p></div></div>
+            <Alert title={dataMode === "database" ? "PostgreSQL frontend connection active" : "Using sample data until inventory is available"} time={message}/>
+            <Alert title="Values include source timestamps" time="Each check is saved to analysis_json"/>
+            <Alert title="Asking prices are not sold prices" time="Use confidence and source notes"/>
           </div>
         </aside>
       </section>
