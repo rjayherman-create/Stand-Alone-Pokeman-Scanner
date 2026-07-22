@@ -27,8 +27,8 @@ app.use(cors());
 app.use(express.json({ limit: "25mb" }));
 app.use(express.urlencoded({ extended: true, limit: "25mb" }));
 
-// Always expose a health route so Railway can verify the service even before
-// a PostgreSQL database is attached.
+// Always expose health and status routes so Railway can verify the service
+// before PostgreSQL is attached.
 const apiRouter = Router();
 apiRouter.get("/healthz", (_req, res) => {
   res.json({
@@ -38,9 +38,21 @@ apiRouter.get("/healthz", (_req, res) => {
   });
 });
 
+apiRouter.get("/status", (_req, res) => {
+  res.json({
+    ok: true,
+    mode: process.env.DATABASE_URL ? "database" : "frontend_only",
+    databaseConfigured: Boolean(process.env.DATABASE_URL),
+    openaiConfigured: Boolean(process.env.AI_INTEGRATIONS_OPENAI_API_KEY),
+    message: process.env.DATABASE_URL
+      ? "Database-backed APIs are enabled."
+      : "Attach Railway PostgreSQL and set DATABASE_URL to enable scanner and inventory APIs.",
+  });
+});
+
 // The inherited scanner API imports the database at module load time. Load it
-// only when DATABASE_URL exists, allowing the PokéVault frontend to deploy as a
-// working standalone MVP before Railway Postgres is provisioned.
+// only when DATABASE_URL exists, allowing the frontend to remain available
+// while configuration is incomplete.
 if (process.env.DATABASE_URL) {
   const { default: scannerRouter } = await import("./routes");
   apiRouter.use(scannerRouter);
@@ -48,11 +60,17 @@ if (process.env.DATABASE_URL) {
   logger.warn(
     "DATABASE_URL is not configured; serving the PokéVault frontend with database-backed API routes disabled.",
   );
-  apiRouter.get("/status", (_req, res) => {
-    res.json({
-      ok: true,
-      mode: "frontend_only",
-      message: "Attach Railway PostgreSQL and set DATABASE_URL to enable scanner and inventory APIs.",
+
+  // Return a proper JSON error for every disabled API route. Without this,
+  // Express's SPA fallback serves index.html and the frontend fails with
+  // "Unexpected token '<' ... is not valid JSON".
+  apiRouter.use((req, res) => {
+    res.status(503).json({
+      ok: false,
+      error: "database_not_configured",
+      message: "DATABASE_URL is not configured for this Railway service.",
+      route: `/api${req.path}`,
+      nextStep: "Add DATABASE_URL as a Railway reference to the PostgreSQL service, then redeploy.",
     });
   });
 }
