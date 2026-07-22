@@ -1,181 +1,70 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
-  Bell, Box, Camera, ChevronRight, CircleDollarSign, Clock3, Gauge,
-  LayoutDashboard, LineChart, PackagePlus, RefreshCw, Search, ShieldCheck,
-  Sparkles, Target, TrendingUp, Upload, WalletCards
+  Bell, Box, Camera, ChevronRight, CircleDollarSign, Clock3, FileImage,
+  Gauge, ImagePlus, LayoutDashboard, LineChart, PackagePlus, RefreshCw,
+  Search, ShieldCheck, Sparkles, Target, TrendingUp, Upload, WalletCards, X
 } from "lucide-react";
 import "./styles.css";
+import "./scanner.css";
 
 type Signal = "HOLD" | "WATCH" | "SELL";
-type Item = {
-  id: number; name: string; type: string; qty: number; cost: number;
-  value: number; trend: number; signal: Signal; target: number; note: string;
-  checkedAt?: string | null; sourceStatus?: string;
-};
-
-type ApiItem = {
-  id: number;
-  product_name: string;
-  subcategory?: string | null;
-  price?: number | null;
-  current_store_price?: number | null;
-  normal_retail_estimate?: number | null;
-  expected_facebook_sale_price?: number | null;
-  recommendation?: string | null;
-  quantity?: number | null;
-  analysis_json?: Record<string, unknown> | null;
-  updated_at?: string | null;
-};
+type ScanMode = "receipt" | "product";
+type Item = { id:number; name:string; type:string; qty:number; cost:number; value:number; trend:number; signal:Signal; target:number; note:string; checkedAt?:string|null; sourceStatus?:string };
+type ApiItem = { id:number; product_name:string; subcategory?:string|null; price?:number|null; current_store_price?:number|null; normal_retail_estimate?:number|null; expected_facebook_sale_price?:number|null; recommendation?:string|null; quantity?:number|null; analysis_json?:Record<string,unknown>|null; updated_at?:string|null };
 
 const seedInventory: Item[] = [
-  { id: 1, name: "Pitch Black Elite Trainer Box", type: "Elite Trainer Box", qty: 1, cost: 65.17, value: 84, trend: 8.2, signal: "HOLD", target: 99, note: "Strongest sealed hold in this purchase." },
-  { id: 2, name: "Chaos Rising Elite Trainer Box", type: "Elite Trainer Box", qty: 1, cost: 65.17, value: 70, trend: 4.6, signal: "HOLD", target: 85, note: "Hold while retail supply remains active." },
-  { id: 3, name: "Mega Greninja ex Premium Collection", type: "Premium Collection", qty: 1, cost: 48.85, value: 52, trend: 2.1, signal: "WATCH", target: 70, note: "Bulky product; sell sooner if local demand strengthens." },
-  { id: 4, name: "Chaos Rising Booster Bundle", type: "Booster Bundle", qty: 1, cost: 34.73, value: 44, trend: 11.4, signal: "WATCH", target: 55, note: "Compact and liquid; monitor sales velocity." },
-  { id: 5, name: "Chaos Rising Charmeleon 3-Pack", type: "3-Pack Blister", qty: 1, cost: 16.28, value: 25, trend: 7.3, signal: "HOLD", target: 35, note: "Promo character supports collector demand." },
-  { id: 6, name: "Pitch Black Binacle 3-Pack", type: "3-Pack Blister", qty: 1, cost: 16.28, value: 28, trend: 9.8, signal: "WATCH", target: 38, note: "Near target; wait for a stronger selling window." },
-  { id: 7, name: "Pitch Black Sleeved Booster", type: "Sleeved Booster", qty: 2, cost: 10.93, value: 18, trend: 5.9, signal: "HOLD", target: 24, note: "Low storage burden; suitable long-term hold." },
+  { id:1,name:"Pitch Black Elite Trainer Box",type:"Elite Trainer Box",qty:1,cost:65.17,value:84,trend:8.2,signal:"HOLD",target:99,note:"Strongest sealed hold in this purchase." },
+  { id:2,name:"Chaos Rising Elite Trainer Box",type:"Elite Trainer Box",qty:1,cost:65.17,value:70,trend:4.6,signal:"HOLD",target:85,note:"Hold while retail supply remains active." },
+  { id:3,name:"Mega Greninja ex Premium Collection",type:"Premium Collection",qty:1,cost:48.85,value:52,trend:2.1,signal:"WATCH",target:70,note:"Bulky product; sell sooner if local demand strengthens." },
+  { id:4,name:"Chaos Rising Booster Bundle",type:"Booster Bundle",qty:1,cost:34.73,value:44,trend:11.4,signal:"WATCH",target:55,note:"Compact and liquid; monitor sales velocity." },
+  { id:5,name:"Chaos Rising Charmeleon 3-Pack",type:"3-Pack Blister",qty:1,cost:16.28,value:25,trend:7.3,signal:"HOLD",target:35,note:"Promo character supports collector demand." },
+  { id:6,name:"Pitch Black Binacle 3-Pack",type:"3-Pack Blister",qty:1,cost:16.28,value:28,trend:9.8,signal:"WATCH",target:38,note:"Near target; wait for a stronger selling window." },
+  { id:7,name:"Pitch Black Sleeved Booster",type:"Sleeved Booster",qty:2,cost:10.93,value:18,trend:5.9,signal:"HOLD",target:24,note:"Low storage burden; suitable long-term hold." },
 ];
-
-const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
-const numberValue = (value: unknown, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
-
-function mapApiItem(item: ApiItem): Item {
-  const analysis = item.analysis_json ?? {};
-  const quotes = Array.isArray(analysis.marketQuotes) ? analysis.marketQuotes as Array<{ value?: number | null }> : [];
-  const quoteValues = quotes.map(q => numberValue(q.value, NaN)).filter(Number.isFinite);
-  const marketValue = numberValue(item.normal_retail_estimate, quoteValues.length ? quoteValues.reduce((a, b) => a + b, 0) / quoteValues.length : numberValue(item.expected_facebook_sale_price));
-  const cost = numberValue(item.price ?? item.current_store_price);
-  const recommendation = String(item.recommendation ?? "HOLD").toUpperCase();
-  const signal: Signal = recommendation.includes("SELL") ? "SELL" : recommendation.includes("WATCH") ? "WATCH" : "HOLD";
-  return {
-    id: item.id,
-    name: item.product_name,
-    type: item.subcategory || "Pokémon sealed product",
-    qty: Math.max(1, numberValue(item.quantity, 1)),
-    cost,
-    value: marketValue,
-    trend: numberValue(analysis.trend30Day, 0),
-    signal,
-    target: numberValue(analysis.targetPrice, marketValue ? marketValue * 1.25 : cost * 1.35),
-    note: String(analysis.marketNote ?? "Live value is calculated from available supported market sources."),
-    checkedAt: String(analysis.marketCheckedAt ?? item.updated_at ?? "") || null,
-    sourceStatus: quotes.length ? `${quoteValues.length}/${quotes.length} sources reporting` : "No live source check yet",
-  };
+const money=(n:number)=>new Intl.NumberFormat("en-US",{style:"currency",currency:"USD"}).format(n);
+const numberValue=(value:unknown,fallback=0)=>Number.isFinite(Number(value))?Number(value):fallback;
+function mapApiItem(item:ApiItem):Item{
+  const analysis=item.analysis_json??{};
+  const quotes=Array.isArray(analysis.marketQuotes)?analysis.marketQuotes as Array<{value?:number|null}>:[];
+  const quoteValues=quotes.map(q=>numberValue(q.value,NaN)).filter(Number.isFinite);
+  const marketValue=numberValue(item.normal_retail_estimate,quoteValues.length?quoteValues.reduce((a,b)=>a+b,0)/quoteValues.length:numberValue(item.expected_facebook_sale_price));
+  const cost=numberValue(item.price??item.current_store_price);
+  const recommendation=String(item.recommendation??"HOLD").toUpperCase();
+  const signal:Signal=recommendation.includes("SELL")?"SELL":recommendation.includes("WATCH")?"WATCH":"HOLD";
+  return {id:item.id,name:item.product_name,type:item.subcategory||"Pokémon sealed product",qty:Math.max(1,numberValue(item.quantity,1)),cost,value:marketValue,trend:numberValue(analysis.trend30Day,0),signal,target:numberValue(analysis.targetPrice,marketValue?marketValue*1.25:cost*1.35),note:String(analysis.marketNote??"Live value is calculated from available supported market sources."),checkedAt:String(analysis.marketCheckedAt??item.updated_at??"")||null,sourceStatus:quotes.length?`${quoteValues.length}/${quotes.length} sources reporting`:"No live source check yet"};
 }
 
-function App() {
-  const [query, setQuery] = useState("");
-  const [active, setActive] = useState("Dashboard");
-  const [inventory, setInventory] = useState<Item[]>(seedInventory);
-  const [dataMode, setDataMode] = useState<"loading" | "database" | "sample" | "error">("loading");
-  const [refreshing, setRefreshing] = useState(false);
-  const [message, setMessage] = useState("Connecting to PostgreSQL…");
-
-  const loadPortfolio = async () => {
-    try {
-      const response = await fetch("/api/pokemon/portfolio", { headers: { Accept: "application/json" } });
-      if (!response.ok) throw new Error(`Portfolio API returned ${response.status}`);
-      const json = await response.json() as { items?: ApiItem[] };
-      const items = (json.items ?? []).map(mapApiItem);
-      if (items.length) {
-        setInventory(items);
-        setDataMode("database");
-        setMessage(`${items.length} products loaded from PostgreSQL.`);
-      } else {
-        setDataMode("sample");
-        setMessage("Database is connected, but no Pokémon inventory has been saved yet. Showing sample portfolio.");
-      }
-    } catch (error) {
-      setDataMode("error");
-      setMessage(error instanceof Error ? `Database connection unavailable: ${error.message}` : "Database connection unavailable.");
-    }
-  };
-
-  useEffect(() => { void loadPortfolio(); }, []);
-
-  const refreshMarket = async () => {
-    const liveItems = dataMode === "database" ? inventory : [];
-    if (!liveItems.length) {
-      setMessage("Save Pokémon inventory to PostgreSQL before running live market checks.");
-      return;
-    }
-    setRefreshing(true);
-    setMessage("Checking supported live market sources…");
-    const results = await Promise.allSettled(liveItems.map(item => fetch(`/api/pokemon/market-check/${item.id}`, { method: "POST" })));
-    const successful = results.filter(result => result.status === "fulfilled" && result.value.ok).length;
-    await loadPortfolio();
-    setRefreshing(false);
-    setMessage(`Market check finished for ${successful} of ${liveItems.length} products. Mercari requires manual verified comparisons.`);
-  };
-
-  const filtered = useMemo(() => inventory.filter(i => i.name.toLowerCase().includes(query.toLowerCase())), [inventory, query]);
-  const totals = useMemo(() => {
-    const invested = inventory.reduce((s, i) => s + i.cost, 0);
-    const market = inventory.reduce((s, i) => s + i.value, 0);
-    const onlineNet = market * .86;
-    const gain = market - invested;
-    return { invested, market, onlineNet, gain, roi: invested ? (gain / invested) * 100 : 0 };
-  }, [inventory]);
-
-  const nav = [
-    ["Dashboard", LayoutDashboard], ["Add Purchase", PackagePlus], ["Scan Receipt", Camera],
-    ["My Collection", Box], ["Market Watch", LineChart], ["Sell Signals", Gauge],
-    ["Price Targets", Target], ["Capital Recovery", WalletCards], ["Alerts", Bell],
-  ] as const;
-
+function App(){
+  const [query,setQuery]=useState(""); const [active,setActive]=useState("Dashboard");
+  const [inventory,setInventory]=useState<Item[]>(seedInventory); const [dataMode,setDataMode]=useState<"loading"|"database"|"sample"|"error">("loading");
+  const [refreshing,setRefreshing]=useState(false); const [message,setMessage]=useState("Connecting to PostgreSQL…");
+  const [scanMode,setScanMode]=useState<ScanMode|null>(null); const [selectedFiles,setSelectedFiles]=useState<File[]>([]); const [scanMessage,setScanMessage]=useState("");
+  const cameraInput=useRef<HTMLInputElement>(null); const documentInput=useRef<HTMLInputElement>(null);
+  const loadPortfolio=async()=>{try{const response=await fetch("/api/pokemon/portfolio",{headers:{Accept:"application/json"}});if(!response.ok)throw new Error(`Portfolio API returned ${response.status}`);const json=await response.json() as {items?:ApiItem[]};const items=(json.items??[]).map(mapApiItem);if(items.length){setInventory(items);setDataMode("database");setMessage(`${items.length} products loaded from PostgreSQL.`)}else{setDataMode("sample");setMessage("Database is connected, but no Pokémon inventory has been saved yet. Showing sample portfolio.")}}catch(error){setDataMode("error");setMessage(error instanceof Error?`Database connection unavailable: ${error.message}`:"Database connection unavailable.")}};
+  useEffect(()=>{void loadPortfolio()},[]);
+  const refreshMarket=async()=>{const liveItems=dataMode==="database"?inventory:[];if(!liveItems.length){setMessage("Save Pokémon inventory to PostgreSQL before running live market checks.");return}setRefreshing(true);setMessage("Checking supported live market sources…");const results=await Promise.allSettled(liveItems.map(item=>fetch(`/api/pokemon/market-check/${item.id}`,{method:"POST"})));const successful=results.filter(result=>result.status==="fulfilled"&&result.value.ok).length;await loadPortfolio();setRefreshing(false);setMessage(`Market check finished for ${successful} of ${liveItems.length} products. Mercari requires manual verified comparisons.`)};
+  const openScanner=(mode:ScanMode)=>{setScanMode(mode);setSelectedFiles([]);setScanMessage("")};
+  const closeScanner=()=>{setScanMode(null);setSelectedFiles([]);setScanMessage("")};
+  const handleFiles=(files:FileList|null)=>{if(files?.length){setSelectedFiles(Array.from(files));setScanMessage("")}};
+  const startScan=async()=>{if(!selectedFiles.length){setScanMessage("Take a photo or choose a receipt/product file first.");return}setScanMessage("File ready. The scanner will analyze it after the Pokémon scan API is connected.")};
+  const handleNav=(label:string)=>{setActive(label);if(label==="Scan Receipt")openScanner("receipt");if(label==="Add Purchase")openScanner("product")};
+  const filtered=useMemo(()=>inventory.filter(i=>i.name.toLowerCase().includes(query.toLowerCase())),[inventory,query]);
+  const totals=useMemo(()=>{const invested=inventory.reduce((s,i)=>s+i.cost,0);const market=inventory.reduce((s,i)=>s+i.value,0);const onlineNet=market*.86;const gain=market-invested;return{invested,market,onlineNet,gain,roi:invested?(gain/invested)*100:0}},[inventory]);
+  const nav=[["Dashboard",LayoutDashboard],["Add Purchase",PackagePlus],["Scan Receipt",Camera],["My Collection",Box],["Market Watch",LineChart],["Sell Signals",Gauge],["Price Targets",Target],["Capital Recovery",WalletCards],["Alerts",Bell]] as const;
   return <div className="app-shell">
-    <aside className="sidebar">
-      <div className="brand"><div className="brand-mark">PV</div><div><strong>PokéVault</strong><span>Investment Tracker</span></div></div>
-      <nav>{nav.map(([label, Icon]) => <button key={label} className={active===label?"active":""} onClick={()=>setActive(label)}><Icon size={18}/><span>{label}</span></button>)}</nav>
-      <div className="side-card"><ShieldCheck size={20}/><div><b>{dataMode === "database" ? "Database connected" : "Connection check"}</b><span>{inventory.length} products in view</span></div></div>
-    </aside>
-
-    <main>
-      <header>
-        <div><p className="eyebrow">POKÉMON SEALED PORTFOLIO</p><h1>{active}</h1><p>{message}</p></div>
-        <div className="header-actions">
-          <button className="ghost"><Upload size={17}/>Import receipt</button>
-          <button className="ghost" onClick={()=>void refreshMarket()} disabled={refreshing}><RefreshCw size={17} className={refreshing?"spin":""}/>{refreshing?"Checking…":"Check market now"}</button>
-          <button className="primary"><Camera size={17}/>Scan purchase</button>
-        </div>
-      </header>
-
-      <section className="hero">
-        <div><span className="live-pill"><Sparkles size={14}/> {dataMode === "database" ? "PostgreSQL portfolio" : "Sample portfolio"}</span><h2>Your collection is up <em>{totals.roi.toFixed(1)}%</em></h2><p>Current gross appreciation is {money(totals.gain)}. Live checks use supported official sources and store the latest valuation back in the database.</p><div className="hero-actions"><button className="light">Review sell signals <ChevronRight size={16}/></button><button className="transparent">Set investment strategy</button></div></div>
-        <div className="score"><span>Portfolio score</span><strong>78</strong><small>Healthy hold</small></div>
-      </section>
-
-      <section className="metrics">
-        <Metric icon={<CircleDollarSign/>} label="Total invested" value={money(totals.invested)} sub="Loaded from inventory cost"/>
-        <Metric icon={<TrendingUp/>} label="Gross market value" value={money(totals.market)} sub={`${money(totals.gain)} unrealized`}/>
-        <Metric icon={<WalletCards/>} label="Estimated online net" value={money(totals.onlineNet)} sub="After modeled selling costs"/>
-        <Metric icon={<Clock3/>} label="Data mode" value={dataMode === "database" ? "Live DB" : "Sample"} sub="Use Check market now to refresh"/>
-      </section>
-
-      <section className="content-grid">
-        <div className="panel portfolio-panel">
-          <div className="panel-head"><div><h3>My sealed inventory</h3><p>PostgreSQL inventory with current valuation status</p></div><div className="search"><Search size={16}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search products"/></div></div>
-          <div className="table-wrap"><table><thead><tr><th>Product</th><th>Cost</th><th>Market</th><th>Sources</th><th>Target</th><th>Signal</th></tr></thead><tbody>
-            {filtered.map(item => <tr key={item.id}><td><div className="product"><div className="product-art">{item.name.slice(0,2).toUpperCase()}</div><div><b>{item.name}</b><span>{item.type}{item.qty>1?` · Qty ${item.qty}`:""}</span></div></div></td><td>{money(item.cost)}</td><td><b>{money(item.value)}</b></td><td><span>{item.sourceStatus}</span></td><td>{money(item.target)}</td><td><span className={`signal ${item.signal.toLowerCase()}`}>{item.signal}</span></td></tr>)}
-          </tbody></table></div>
-        </div>
-
-        <aside className="right-column">
-          <div className="panel signal-card"><div className="panel-head"><div><h3>Valuation sources</h3><p>Supported current market checks</p></div><span className="signal watch">LIVE</span></div><h4>Source rules</h4><ul><li>TCGplayer official market pricing when product IDs and keys exist</li><li>PriceCharting official guide pricing when product IDs and token exist</li><li>eBay active-listing median including visible shipping</li><li>Mercari entered as verified manual comparables because no supported public pricing API is available</li></ul><button className="full" onClick={()=>void refreshMarket()}>Refresh all products</button></div>
-          <div className="panel alert-list"><div className="panel-head"><div><h3>Connection status</h3><p>Database and source diagnostics</p></div></div>
-            <Alert title={dataMode === "database" ? "PostgreSQL frontend connection active" : "Using sample data until inventory is available"} time={message}/>
-            <Alert title="Values include source timestamps" time="Each check is saved to analysis_json"/>
-            <Alert title="Asking prices are not sold prices" time="Use confidence and source notes"/>
-          </div>
-        </aside>
-      </section>
+    <input ref={cameraInput} className="hidden-file" type="file" accept="image/*" capture="environment" onChange={e=>handleFiles(e.target.files)}/>
+    <input ref={documentInput} className="hidden-file" type="file" accept="image/*,.pdf,application/pdf" multiple onChange={e=>handleFiles(e.target.files)}/>
+    <aside className="sidebar"><div className="brand"><div className="brand-mark">PV</div><div><strong>PokéVault</strong><span>Investment Tracker</span></div></div><nav>{nav.map(([label,Icon])=><button key={label} className={active===label?"active":""} onClick={()=>handleNav(label)}><Icon size={18}/><span>{label}</span></button>)}</nav><div className="side-card"><ShieldCheck size={20}/><div><b>{dataMode==="database"?"Database connected":"Connection check"}</b><span>{inventory.length} products in view</span></div></div></aside>
+    <main><header><div><p className="eyebrow">POKÉMON SEALED PORTFOLIO</p><h1>{active}</h1><p>{message}</p></div><div className="header-actions"><button className="ghost" onClick={()=>openScanner("receipt")}><Upload size={17}/>Import receipt</button><button className="ghost" onClick={()=>void refreshMarket()} disabled={refreshing}><RefreshCw size={17}/>{refreshing?"Checking…":"Check market now"}</button><button className="primary" onClick={()=>openScanner("product")}><Camera size={17}/>Scan purchase</button></div></header>
+      <section className="hero"><div><span className="live-pill"><Sparkles size={14}/> {dataMode==="database"?"PostgreSQL portfolio":"Sample portfolio"}</span><h2>Your collection is up <em>{totals.roi.toFixed(1)}%</em></h2><p>Current gross appreciation is {money(totals.gain)}. Live checks use supported official sources and store the latest valuation back in the database.</p><div className="hero-actions"><button className="light">Review sell signals <ChevronRight size={16}/></button><button className="transparent">Set investment strategy</button></div></div><div className="score"><span>Portfolio score</span><strong>78</strong><small>Healthy hold</small></div></section>
+      <section className="metrics"><Metric icon={<CircleDollarSign/>} label="Total invested" value={money(totals.invested)} sub="Loaded from inventory cost"/><Metric icon={<TrendingUp/>} label="Gross market value" value={money(totals.market)} sub={`${money(totals.gain)} unrealized`}/><Metric icon={<WalletCards/>} label="Estimated online net" value={money(totals.onlineNet)} sub="After modeled selling costs"/><Metric icon={<Clock3/>} label="Data mode" value={dataMode==="database"?"Live DB":"Sample"} sub="Use Check market now to refresh"/></section>
+      <section className="content-grid"><div className="panel portfolio-panel"><div className="panel-head"><div><h3>My sealed inventory</h3><p>PostgreSQL inventory with current valuation status</p></div><div className="search"><Search size={16}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search products"/></div></div><div className="table-wrap"><table><thead><tr><th>Product</th><th>Cost</th><th>Market</th><th>Sources</th><th>Target</th><th>Signal</th></tr></thead><tbody>{filtered.map(item=><tr key={item.id}><td><div className="product"><div className="product-art">{item.name.slice(0,2).toUpperCase()}</div><div><b>{item.name}</b><span>{item.type}{item.qty>1?` · Qty ${item.qty}`:""}</span></div></div></td><td>{money(item.cost)}</td><td><b>{money(item.value)}</b></td><td>{item.sourceStatus}</td><td>{money(item.target)}</td><td><span className={`signal ${item.signal.toLowerCase()}`}>{item.signal}</span></td></tr>)}</tbody></table></div></div>
+      <aside className="right-column"><div className="panel signal-card"><div className="panel-head"><div><h3>Valuation sources</h3><p>Supported current market checks</p></div><span className="signal watch">LIVE</span></div><h4>Source rules</h4><ul><li>TCGplayer official market pricing when IDs and keys exist</li><li>PriceCharting official guide pricing when IDs and token exist</li><li>eBay active-listing median including visible shipping</li><li>Mercari uses verified manual comparables</li></ul><button className="full" onClick={()=>void refreshMarket()}>Refresh all products</button></div><div className="panel alert-list"><div className="panel-head"><div><h3>Connection status</h3><p>Database and source diagnostics</p></div></div><Alert title={dataMode==="database"?"PostgreSQL frontend connection active":"Using sample data until inventory is available"} time={message}/><Alert title="Values include source timestamps" time="Each check is saved to analysis_json"/><Alert title="Asking prices are not sold prices" time="Use confidence and source notes"/></div></aside></section>
     </main>
-  </div>;
+    {scanMode&&<div className="scan-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)closeScanner()}}><section className="scan-dialog" role="dialog" aria-modal="true" aria-labelledby="scan-title"><button className="scan-close" onClick={closeScanner} aria-label="Close scanner"><X size={20}/></button><div className="scan-icon"><Camera size={28}/></div><p className="eyebrow">POKÉVAULT SCANNER</p><h2 id="scan-title">{scanMode==="receipt"?"Scan or upload a receipt":"Photograph a Pokémon purchase"}</h2><p className="scan-help">Use your phone camera, choose a saved photo, or attach a PDF receipt.</p><div className="scan-options"><button className="scan-option" onClick={()=>cameraInput.current?.click()}><Camera size={24}/><span><b>Open camera</b><small>Take a new photo</small></span></button><button className="scan-option" onClick={()=>documentInput.current?.click()}><ImagePlus size={24}/><span><b>Choose file</b><small>Photo, image, or PDF</small></span></button></div>{selectedFiles.length>0&&<div className="selected-files"><b>{selectedFiles.length===1?"Selected file":`${selectedFiles.length} selected files`}</b>{selectedFiles.map((file,index)=><div className="selected-file" key={`${file.name}-${index}`}><FileImage size={17}/><span>{file.name}</span><small>{Math.max(1,Math.round(file.size/1024))} KB</small></div>)}</div>}{scanMessage&&<p className="scan-message">{scanMessage}</p>}<button className="primary scan-submit" onClick={startScan} disabled={!selectedFiles.length}>Analyze {scanMode==="receipt"?"receipt":"purchase"}</button></section></div>}
+  </div>
 }
-
-function Metric({icon,label,value,sub}:{icon:React.ReactNode,label:string,value:string,sub:string}) { return <div className="metric"><div className="metric-icon">{icon}</div><div><span>{label}</span><strong>{value}</strong><small>{sub}</small></div></div> }
-function Alert({title,time}:{title:string,time:string}) { return <div className="alert"><div className="dot"/><div><b>{title}</b><span>{time}</span></div><ChevronRight size={16}/></div> }
-
+function Metric({icon,label,value,sub}:{icon:React.ReactNode,label:string,value:string,sub:string}){return <div className="metric"><div className="metric-icon">{icon}</div><div><span>{label}</span><strong>{value}</strong><small>{sub}</small></div></div>}
+function Alert({title,time}:{title:string,time:string}){return <div className="alert"><div className="dot"/><div><b>{title}</b><span>{time}</span></div><ChevronRight size={16}/></div>}
 createRoot(document.getElementById("root")!).render(<React.StrictMode><App/></React.StrictMode>);
