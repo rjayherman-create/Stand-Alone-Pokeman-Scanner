@@ -1,9 +1,9 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
-  Bell, Box, Camera, ChevronRight, CircleDollarSign, Clock3, Gauge,
-  LayoutDashboard, LineChart, PackagePlus, Search, ShieldCheck, Sparkles,
-  Target, TrendingUp, Upload, WalletCards
+  Bell, Box, Camera, ChevronRight, CircleDollarSign, Clock3, FileImage,
+  Gauge, ImagePlus, LayoutDashboard, LineChart, PackagePlus, Search,
+  ShieldCheck, Sparkles, Target, TrendingUp, Upload, WalletCards, X
 } from "lucide-react";
 import "./styles.css";
 
@@ -12,6 +12,8 @@ type Item = {
   id: number; name: string; type: string; qty: number; cost: number;
   value: number; trend: number; signal: Signal; target: number; note: string;
 };
+
+type ScanMode = "receipt" | "product";
 
 const inventory: Item[] = [
   { id: 1, name: "Pitch Black Elite Trainer Box", type: "Elite Trainer Box", qty: 1, cost: 65.17, value: 84, trend: 8.2, signal: "HOLD", target: 99, note: "Strongest sealed hold in this purchase." },
@@ -28,6 +30,12 @@ const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency",
 function App() {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState("Dashboard");
+  const [scanMode, setScanMode] = useState<ScanMode | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [scanMessage, setScanMessage] = useState("");
+  const cameraInput = useRef<HTMLInputElement>(null);
+  const documentInput = useRef<HTMLInputElement>(null);
+
   const filtered = useMemo(() => inventory.filter(i => i.name.toLowerCase().includes(query.toLowerCase())), [query]);
   const totals = useMemo(() => {
     const invested = inventory.reduce((s, i) => s + i.cost, 0);
@@ -42,17 +50,56 @@ function App() {
     ["Price Targets", Target], ["Capital Recovery", WalletCards], ["Alerts", Bell],
   ] as const;
 
+  function openScanner(mode: ScanMode) {
+    setScanMode(mode);
+    setSelectedFiles([]);
+    setScanMessage("");
+  }
+
+  function closeScanner() {
+    setScanMode(null);
+    setSelectedFiles([]);
+    setScanMessage("");
+  }
+
+  function handleFiles(files: FileList | null) {
+    if (!files?.length) return;
+    setSelectedFiles(Array.from(files));
+    setScanMessage("");
+  }
+
+  async function startScan() {
+    if (!selectedFiles.length) {
+      setScanMessage("Take a photo or choose a receipt/product file first.");
+      return;
+    }
+
+    setScanMessage("File ready. The scanner will analyze it after the Pokémon scan API is connected.");
+  }
+
+  function handleNav(label: string) {
+    setActive(label);
+    if (label === "Scan Receipt") openScanner("receipt");
+    if (label === "Add Purchase") openScanner("product");
+  }
+
   return <div className="app-shell">
+    <input ref={cameraInput} className="hidden-file" type="file" accept="image/*" capture="environment" onChange={e => handleFiles(e.target.files)} />
+    <input ref={documentInput} className="hidden-file" type="file" accept="image/*,.pdf,application/pdf" multiple onChange={e => handleFiles(e.target.files)} />
+
     <aside className="sidebar">
       <div className="brand"><div className="brand-mark">PV</div><div><strong>PokéVault</strong><span>Investment Tracker</span></div></div>
-      <nav>{nav.map(([label, Icon]) => <button key={label} className={active===label?"active":""} onClick={()=>setActive(label)}><Icon size={18}/><span>{label}</span></button>)}</nav>
+      <nav>{nav.map(([label, Icon]) => <button key={label} className={active===label?"active":""} onClick={()=>handleNav(label)}><Icon size={18}/><span>{label}</span></button>)}</nav>
       <div className="side-card"><ShieldCheck size={20}/><div><b>Portfolio protected</b><span>7 products · 8 sealed units</span></div></div>
     </aside>
 
     <main>
       <header>
         <div><p className="eyebrow">POKÉMON SEALED PORTFOLIO</p><h1>{active}</h1><p>Track cost, value, market momentum, and the best time to sell.</p></div>
-        <div className="header-actions"><button className="ghost"><Upload size={17}/>Import receipt</button><button className="primary"><Camera size={17}/>Scan purchase</button></div>
+        <div className="header-actions">
+          <button className="ghost" onClick={()=>openScanner("receipt")}><Upload size={17}/>Import receipt</button>
+          <button className="primary" onClick={()=>openScanner("product")}><Camera size={17}/>Scan purchase</button>
+        </div>
       </header>
 
       <section className="hero">
@@ -85,6 +132,33 @@ function App() {
         </aside>
       </section>
     </main>
+
+    {scanMode && <div className="scan-backdrop" role="presentation" onMouseDown={e => { if (e.target === e.currentTarget) closeScanner(); }}>
+      <section className="scan-dialog" role="dialog" aria-modal="true" aria-labelledby="scan-title">
+        <button className="scan-close" onClick={closeScanner} aria-label="Close scanner"><X size={20}/></button>
+        <div className="scan-icon"><Camera size={28}/></div>
+        <p className="eyebrow">POKÉVAULT SCANNER</p>
+        <h2 id="scan-title">{scanMode === "receipt" ? "Scan or upload a receipt" : "Photograph a Pokémon purchase"}</h2>
+        <p className="scan-help">Use your phone camera, choose a saved photo, or attach a PDF receipt. On mobile, “Open camera” requests the rear camera.</p>
+
+        <div className="scan-options">
+          <button className="scan-option" onClick={() => cameraInput.current?.click()}>
+            <Camera size={24}/><span><b>Open camera</b><small>Take a new photo</small></span>
+          </button>
+          <button className="scan-option" onClick={() => documentInput.current?.click()}>
+            <ImagePlus size={24}/><span><b>Choose file</b><small>Photo, image, or PDF</small></span>
+          </button>
+        </div>
+
+        {selectedFiles.length > 0 && <div className="selected-files">
+          <b>{selectedFiles.length === 1 ? "Selected file" : `${selectedFiles.length} selected files`}</b>
+          {selectedFiles.map((file, index) => <div className="selected-file" key={`${file.name}-${index}`}><FileImage size={17}/><span>{file.name}</span><small>{Math.max(1, Math.round(file.size / 1024))} KB</small></div>)}
+        </div>}
+
+        {scanMessage && <p className="scan-message">{scanMessage}</p>}
+        <button className="primary scan-submit" onClick={startScan} disabled={!selectedFiles.length}>Analyze {scanMode === "receipt" ? "receipt" : "purchase"}</button>
+      </section>
+    </div>}
   </div>;
 }
 
