@@ -14,6 +14,7 @@ import preStoreScanRouter from "./pre-store-scan";
 import thriftScanRouter from "./thrift-scan";
 import pokemonMarketRouter from "./pokemon-market";
 import pokemonScanRouter from "./pokemon-scan";
+import pokemonUpcLabelRouter from "./pokemon-upc-label";
 
 const router: IRouter = Router();
 
@@ -32,5 +33,6 @@ router.use(preStoreScanRouter);
 router.use(thriftScanRouter);
 router.use(pokemonMarketRouter);
 router.use(pokemonScanRouter);
+router.use(pokemonUpcLabelRouter);
 
 export default router;
