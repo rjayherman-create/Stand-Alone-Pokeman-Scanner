@@ -23,6 +23,11 @@ function clean(value: unknown) {
   return String(value ?? "").trim();
 }
 
+function normalizeUpc(value: unknown) {
+  const upc = clean(value).replace(/\D/g, "");
+  return upc.length >= 8 && upc.length <= 14 ? upc : "";
+}
+
 function collectorNumberBase(value: unknown) {
   return clean(value).split("/")[0]?.trim() ?? "";
 }
@@ -36,7 +41,6 @@ async function findPokemonCardMatches(extracted: Record<string, unknown>) {
   const cardName = clean(extracted.card_name || extracted.pokemon_name || extracted.product_name);
   const cardNumber = collectorNumberBase(extracted.collector_number || extracted.card_number);
   const setName = clean(extracted.set_name);
-
   if (!cardName || (!productType.includes("card") && !cardNumber)) return [];
 
   const queryParts = [`name:"${escapePokemonQuery(cardName)}"`];
@@ -48,10 +52,8 @@ async function findPokemonCardMatches(extracted: Record<string, unknown>) {
     headers: process.env.POKEMON_TCG_API_KEY ? { "X-Api-Key": process.env.POKEMON_TCG_API_KEY } : {},
     signal: AbortSignal.timeout(10_000),
   });
-
   if (!response.ok) return [];
   const json = await response.json() as { data?: Array<Record<string, any>> };
-
   return (json.data ?? []).map(card => ({
     id: card.id,
     name: card.name,
@@ -64,15 +66,14 @@ async function findPokemonCardMatches(extracted: Record<string, unknown>) {
 }
 
 async function lookupUpc(upcValue: unknown) {
-  const upc = clean(upcValue).replace(/\D/g, "");
-  if (upc.length < 8 || upc.length > 14) return null;
+  const upc = normalizeUpc(upcValue);
+  if (!upc) return null;
 
   const paidMode = process.env.UPCITEMDB_MODE === "paid";
   const endpoint = paidMode
     ? "https://api.upcitemdb.com/prod/v1/lookup"
     : "https://api.upcitemdb.com/prod/trial/lookup";
   const headers: Record<string, string> = { Accept: "application/json" };
-
   if (paidMode && process.env.UPCITEMDB_USER_KEY && process.env.UPCITEMDB_KEY_TYPE) {
     headers.user_key = process.env.UPCITEMDB_USER_KEY;
     headers.key_type = process.env.UPCITEMDB_KEY_TYPE;
@@ -83,93 +84,123 @@ async function lookupUpc(upcValue: unknown) {
     signal: AbortSignal.timeout(10_000),
   });
   if (!response.ok) return null;
-
   const json = await response.json() as { items?: Array<Record<string, any>> };
   const item = json.items?.[0];
-  if (!item) return null;
-
+  if (!item?.title) return null;
   return {
     upc,
-    title: item.title ?? null,
+    title: item.title,
     brand: item.brand ?? null,
     category: item.category ?? null,
-    images: item.images ?? [],
+    description: item.description ?? null,
+    images: Array.isArray(item.images) ? item.images : [],
     lowest_recorded_price: item.lowest_recorded_price ?? null,
+    offers: Array.isArray(item.offers) ? item.offers.slice(0, 10) : [],
   };
 }
 
 function estimateOpenAiCost(inputTokens: number, outputTokens: number) {
-  // GPT-4.1 mini pricing: $0.40/M input tokens and $1.60/M output tokens.
   return Number((((inputTokens / 1_000_000) * 0.4) + ((outputTokens / 1_000_000) * 1.6)).toFixed(6));
 }
 
 router.post("/pokemon/scan", upload.array("images", 4), async (req, res) => {
   try {
     const files = (req.files as Express.Multer.File[] | undefined) ?? [];
-    if (!files.length) return res.status(400).json({ success: false, error: "Upload at least one product image using the images field." });
+    const submittedUpc = normalizeUpc(req.body.upc || req.body.barcode);
+    if (!files.length && !submittedUpc) {
+      return res.status(400).json({ success: false, error: "Upload a product image or submit a UPC." });
+    }
 
     const retailer = String(req.body.retailer || "Unknown retailer");
     const storeLocation = String(req.body.store_location || "Unknown location");
     const purchasePrice = Number(req.body.purchase_price || 0);
     const quantity = Math.max(1, Number(req.body.quantity || 1));
     const purchaseDate = String(req.body.purchase_date || new Date().toISOString().slice(0, 10));
-
-    const imageContent = files.map(file => ({
-      type: "image_url" as const,
-      image_url: { url: `data:${file.mimetype};base64,${file.buffer.toString("base64")}`, detail: "high" as const },
-    }));
-
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4.1-mini",
-      max_completion_tokens: 1200,
-      messages: [
-        {
-          role: "system",
-          content: "You identify Pokémon TCG cards, graded cards, and sealed products from photos. Return only valid JSON. Never invent a UPC, set, collector number, promo, language, grade, or identifier. Use null when uncertain. Identification is not authentication.",
-        },
-        {
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: `Identify this exact Pokémon item. Return JSON with: product_name, card_name, pokemon_name, collector_number, set_name, series_name, product_type, rarity, language, region, upc, sku, grading_company, grade, promo_card_name, booster_pack_count, pokemon_center_exclusive, sealed_status, box_condition, card_condition, confidence (0-100), match_notes, needs_review. Retailer: ${retailer}. Purchase date: ${purchaseDate}.`,
-            },
-            ...imageContent,
-          ],
-        },
-      ],
-    });
-
-    const extracted = parseJson(completion.choices[0]?.message?.content ?? "{}");
-    const productName = String(extracted.product_name || extracted.card_name || "Unknown Pokémon product");
-    const confidence = Number(extracted.confidence || 0);
     const warnings: string[] = [];
 
-    const [cardMatches, upcMatch] = await Promise.all([
-      findPokemonCardMatches(extracted).catch(error => {
-        warnings.push(`Pokémon card confirmation unavailable: ${error instanceof Error ? error.message : "unknown error"}`);
-        return [];
-      }),
-      lookupUpc(extracted.upc).catch(error => {
-        warnings.push(`UPC confirmation unavailable: ${error instanceof Error ? error.message : "unknown error"}`);
-        return null;
-      }),
-    ]);
+    const upcMatch = submittedUpc
+      ? await lookupUpc(submittedUpc).catch(error => {
+          warnings.push(`UPC lookup unavailable: ${error instanceof Error ? error.message : "unknown error"}`);
+          return null;
+        })
+      : null;
 
-    const inputTokens = completion.usage?.prompt_tokens ?? 0;
-    const outputTokens = completion.usage?.completion_tokens ?? 0;
+    let extracted: Record<string, unknown>;
+    let inputTokens = 0;
+    let outputTokens = 0;
+    let scanMethod: "upc" | "openai_fallback";
+
+    if (upcMatch?.title) {
+      scanMethod = "upc";
+      extracted = {
+        product_name: upcMatch.title,
+        product_type: upcMatch.category || "Sealed Pokémon product",
+        brand: upcMatch.brand || "Pokémon",
+        upc: upcMatch.upc,
+        confidence: 100,
+        needs_review: false,
+        match_notes: "Identified by exact UPC database lookup. OpenAI was not called.",
+      };
+    } else {
+      if (!files.length) {
+        return res.status(404).json({
+          success: false,
+          error: "The UPC was not found. Add a package photo so OpenAI can be used as backup.",
+          upc: submittedUpc,
+        });
+      }
+
+      scanMethod = "openai_fallback";
+      const imageContent = files.map(file => ({
+        type: "image_url" as const,
+        image_url: { url: `data:${file.mimetype};base64,${file.buffer.toString("base64")}`, detail: "high" as const },
+      }));
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4.1-mini",
+        max_completion_tokens: 1200,
+        messages: [
+          {
+            role: "system",
+            content: "You identify Pokémon TCG cards, graded cards, and sealed products from photos. Return only valid JSON. Never invent a UPC, set, collector number, promo, language, grade, or identifier. Use null when uncertain. Identification is not authentication.",
+          },
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: `UPC lookup did not identify this item. Identify it from the package or card photo. Return JSON with: product_name, card_name, pokemon_name, collector_number, set_name, series_name, product_type, rarity, language, region, upc, sku, grading_company, grade, promo_card_name, booster_pack_count, pokemon_center_exclusive, sealed_status, box_condition, card_condition, confidence (0-100), match_notes, needs_review. Retailer: ${retailer}. Purchase date: ${purchaseDate}.`,
+              },
+              ...imageContent,
+            ],
+          },
+        ],
+      });
+      extracted = parseJson(completion.choices[0]?.message?.content ?? "{}");
+      inputTokens = completion.usage?.prompt_tokens ?? 0;
+      outputTokens = completion.usage?.completion_tokens ?? 0;
+    }
+
+    const productName = String(extracted.product_name || extracted.card_name || "Unknown Pokémon product");
+    const confidence = Number(extracted.confidence || 0);
+    const confirmedUpc = normalizeUpc(extracted.upc || submittedUpc) || null;
+    const cardMatches = scanMethod === "openai_fallback"
+      ? await findPokemonCardMatches(extracted).catch(error => {
+          warnings.push(`Pokémon card confirmation unavailable: ${error instanceof Error ? error.message : "unknown error"}`);
+          return [];
+        })
+      : [];
     const scanCostUsd = estimateOpenAiCost(inputTokens, outputTokens);
 
     const savedItems = [];
     for (let unit = 1; unit <= quantity; unit += 1) {
       const [saved] = await db.insert(inventoryItemsTable).values({
         retailer,
-        source_type: "pokemon_scan",
+        source_type: scanMethod === "upc" ? "pokemon_upc_scan" : "pokemon_scan",
         store_location: storeLocation,
         product_name: productName,
-        brand: "Pokémon",
+        brand: String(extracted.brand || upcMatch?.brand || "Pokémon"),
         subcategory: extracted.product_type ? String(extracted.product_type) : "Pokémon product",
-        upc: extracted.upc ? String(extracted.upc) : null,
+        upc: confirmedUpc,
         sku: extracted.sku ? String(extracted.sku) : null,
         price: Number.isFinite(purchasePrice) ? purchasePrice : 0,
         current_store_price: Number.isFinite(purchasePrice) ? purchasePrice : 0,
@@ -185,8 +216,11 @@ router.post("/pokemon/scan", upload.array("images", 4), async (req, res) => {
           purchaseDate,
           inventoryUnit: unit,
           sourceImageCount: files.length,
+          scanMethod,
+          openAiUsed: scanMethod === "openai_fallback",
           pokemonCardMatches: cardMatches,
           upcMatch,
+          productImage: upcMatch?.images?.[0] ?? null,
           scanUsage: { inputTokens, outputTokens, estimatedOpenAiCostUsd: scanCostUsd },
           warnings,
           marketCheckedAt: null,
@@ -197,8 +231,11 @@ router.post("/pokemon/scan", upload.array("images", 4), async (req, res) => {
 
     res.json({
       success: true,
+      scan_method: scanMethod,
+      openai_used: scanMethod === "openai_fallback",
       extracted,
       confirmations: { pokemon_card_matches: cardMatches, upc_match: upcMatch },
+      product_image: upcMatch?.images?.[0] ?? null,
       usage: { input_tokens: inputTokens, output_tokens: outputTokens, estimated_openai_cost_usd: scanCostUsd },
       warnings,
       saved_items: savedItems,
@@ -217,7 +254,8 @@ router.get("/pokemon/scan/status", (_req, res) => {
   res.json({
     status: "ok",
     endpoint: "POST /api/pokemon/scan",
-    fields: ["images", "retailer", "store_location", "purchase_price", "quantity", "purchase_date"],
+    fields: ["images", "upc", "retailer", "store_location", "purchase_price", "quantity", "purchase_date"],
+    scanOrder: ["UPC database", "OpenAI picture fallback", "Pokémon card confirmation"],
     imageLimit: 4,
     maxFileSizeMb: 20,
     databaseConfigured: Boolean(process.env.DATABASE_URL),
