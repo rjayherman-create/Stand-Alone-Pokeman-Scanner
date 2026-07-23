@@ -18,10 +18,10 @@ import { Link } from "wouter";
 const CAPTURE_METHODS = [
   {
     icon: Camera,
-    title: "Photo Scan",
-    desc: "Take a photo of any clearance tag, price sign, box, or barcode. AI vision extracts the item and scores the flip. Works with all retailers.",
+    title: "UPC Camera Scan",
+    desc: "Take a photo of any UPC label, barcode, clearance tag, price sign, box, or shelf tag. AI vision extracts the image data and scores the flip. Works with all retailers.",
     status: "active",
-    href: "/photo-scan",
+    href: "/upc-scan",
   },
   {
     icon: Upload,

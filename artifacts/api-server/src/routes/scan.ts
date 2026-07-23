@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import multer from "multer";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { scoreFlipItem } from "../lib/scoring";
@@ -17,8 +17,7 @@ const RETAILER_TAG_HINTS: Record<string, string> = {
   "Lowe's": "Lowe's clearance shows red/yellow tags with item SKU and markdown price.",
 };
 
-// POST /photo-scan
-router.post("/photo-scan", upload.single("image"), async (req, res) => {
+const photoScanHandler = async (req: Request, res: Response) => {
   try {
     const retailer = (req.body.retailer as string) || "Costco";
     const store_location = req.body.store_location as string;
@@ -182,10 +181,15 @@ Return JSON with these exact fields:
     req.log.error({ err }, "Photo scan failed");
     res.status(500).json({ success: false, error_message: "Photo scan failed. Please try again." });
   }
-});
+};
 
-// POST /screenshot-ocr
-router.post("/screenshot-ocr", upload.single("image"), async (req, res) => {
+// Keep both URL styles for compatibility:
+// - /api/photo-scan (current)
+// - /api/scan/photo-scan (legacy)
+router.post("/photo-scan", upload.single("image"), photoScanHandler);
+router.post("/scan/photo-scan", upload.single("image"), photoScanHandler);
+
+const screenshotOcrHandler = async (req: Request, res: Response) => {
   try {
     const retailer = (req.body.retailer as string) || "Costco";
     const store_location = req.body.store_location as string;
@@ -307,7 +311,13 @@ Return JSON:
     req.log.error({ err }, "Screenshot OCR failed");
     res.status(500).json({ success: false, rows: [], error_message: "Screenshot processing failed." });
   }
-});
+};
+
+// Keep both URL styles for compatibility:
+// - /api/screenshot-ocr (current)
+// - /api/scan/screenshot-ocr (legacy)
+router.post("/screenshot-ocr", upload.single("image"), screenshotOcrHandler);
+router.post("/scan/screenshot-ocr", upload.single("image"), screenshotOcrHandler);
 
 // POST /public-web-check
 router.post("/public-web-check", async (req, res) => {

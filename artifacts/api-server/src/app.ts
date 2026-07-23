@@ -3,8 +3,22 @@ import cors from "cors";
 import path from "path";
 import pinoHttp from "pino-http";
 import { logger } from "./lib/logger";
+import ocrPublicRouter from "./routes/ocr-public";
 
 const app: Express = express();
+const configuredDatabaseUrl =
+  process.env.DATABASE_URL
+  ?? process.env.DATABASE_PRIVATE_URL
+  ?? process.env.POSTGRES_URL
+  ?? process.env.POSTGRESQL_URL
+  ?? process.env.PGURI;
+const configuredOpenAiKey =
+  process.env.AI_INTEGRATIONS_OPENAI_API_KEY
+  ?? process.env.OPENAI_API_KEY;
+
+if (!process.env.DATABASE_URL && configuredDatabaseUrl) {
+  process.env.DATABASE_URL = configuredDatabaseUrl;
+}
 
 app.use(
   pinoHttp({
@@ -34,26 +48,56 @@ apiRouter.get("/healthz", (_req, res) => {
   res.json({
     ok: true,
     app: "pokevault-tracker",
-    database: process.env.DATABASE_URL ? "configured" : "not_configured",
+    database: configuredDatabaseUrl ? "configured" : "not_configured",
   });
+});
+
+apiRouter.get("/db-healthz", async (_req, res) => {
+  if (!configuredDatabaseUrl) {
+    res.status(503).json({
+      ok: false,
+      databaseConfigured: false,
+      databaseReachable: false,
+      message: "No database URL is configured for this service.",
+    });
+    return;
+  }
+
+  try {
+    const { pool } = await import("@workspace/db");
+    await pool.query("select 1 as ok");
+    res.json({ ok: true, databaseConfigured: true, databaseReachable: true });
+  } catch (err) {
+    logger.error({ err }, "Database healthcheck failed");
+    res.status(503).json({
+      ok: false,
+      databaseConfigured: true,
+      databaseReachable: false,
+      message: "Database is configured but unreachable.",
+    });
+  }
 });
 
 apiRouter.get("/status", (_req, res) => {
   res.json({
     ok: true,
-    mode: process.env.DATABASE_URL ? "database" : "frontend_only",
-    databaseConfigured: Boolean(process.env.DATABASE_URL),
-    openaiConfigured: Boolean(process.env.AI_INTEGRATIONS_OPENAI_API_KEY),
-    message: process.env.DATABASE_URL
+    mode: configuredDatabaseUrl ? "database" : "frontend_only",
+    databaseConfigured: Boolean(configuredDatabaseUrl),
+    openaiConfigured: Boolean(configuredOpenAiKey),
+    message: configuredDatabaseUrl
       ? "Database-backed APIs are enabled."
       : "Attach Railway PostgreSQL and set DATABASE_URL to enable scanner and inventory APIs.",
   });
 });
 
+// OCR-only screenshot scanning does not require DB writes, so keep it
+// available even when database wiring is still being configured.
+apiRouter.use(ocrPublicRouter);
+
 // The inherited scanner API imports the database at module load time. Load it
 // only when DATABASE_URL exists, allowing the frontend to remain available
 // while configuration is incomplete.
-if (process.env.DATABASE_URL) {
+if (configuredDatabaseUrl) {
   const { default: scannerRouter } = await import("./routes");
   apiRouter.use(scannerRouter);
 } else {

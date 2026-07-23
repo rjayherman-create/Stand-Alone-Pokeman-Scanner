@@ -8,6 +8,14 @@ import { ArrowRight, TrendingUp, AlertCircle, Zap, ReceiptText, PackageCheck, Ma
 
 const WORKFLOW_CARDS = [
   {
+    href: "/upc-scan",
+    icon: Search,
+    title: "Scan UPC labels",
+    desc: "Use the camera when you can see a UPC, barcode, or model label and want the image plus extracted item data.",
+    action: "UPC Camera",
+    color: "text-primary",
+  },
+  {
     href: "/quick-scan",
     icon: Zap,
     title: "Scan in store",

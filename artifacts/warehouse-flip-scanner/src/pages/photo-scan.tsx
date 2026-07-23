@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { usePhotoScan, getListInventoryQueryKey, getGetDashboardSummaryQueryKey } from "@workspace/api-client-react";
+import { usePhotoScan, getListInventoryQueryKey, getGetDashboardSummaryQueryKey, type PhotoScanInput } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,7 +28,17 @@ const CATEGORIES = ["LEGO", "Toys", "Tools", "Appliances", "Seasonal", "Sporting
 
 interface ScanResult {
   success: boolean;
-  extracted?: Record<string, unknown>;
+  extracted?: {
+    product_name?: string | null;
+    item_number?: string | null;
+    upc?: string | null;
+    dpci?: string | null;
+    markdown_code?: string | null;
+    price?: number | null;
+    clearance_price?: number | null;
+    regular_price?: number | null;
+    percent_off?: number | null;
+  };
   decision?: {
     flip_score: number;
     recommendation: string;
@@ -83,15 +93,16 @@ export default function PhotoScan() {
       toast({ title: "No image selected", description: "Please take or upload a photo first.", variant: "destructive" });
       return;
     }
-    const formData = new FormData();
-    formData.append("image", file);
-    formData.append("retailer", retailer);
-    formData.append("store_location", store === "Other / Current Store" ? "Other" : store);
-    formData.append("category", category);
+    const payload: PhotoScanInput = {
+      image: file,
+      retailer,
+      store_location: store === "Other / Current Store" ? "Other" : store,
+      category,
+    };
 
-    photoScan.mutate({ data: formData as unknown as { image: Blob; store_location: string; category?: string } }, {
+    photoScan.mutate({ data: payload }, {
       onSuccess: (data) => {
-        setResult(data as unknown as ScanResult);
+        setResult(data as ScanResult);
         queryClient.invalidateQueries({ queryKey: getListInventoryQueryKey() });
         queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
       },
@@ -106,8 +117,8 @@ export default function PhotoScan() {
   return (
     <div className="max-w-2xl mx-auto space-y-6 pb-32 md:pb-6">
       <div>
-        <h2 className="text-2xl font-bold text-primary">Photo Scan</h2>
-        <p className="text-sm text-muted-foreground mt-1">Take a quick in-store photo of a clearance tag, shelf tag, box, barcode, or app screen.</p>
+        <h2 className="text-2xl font-bold text-primary">UPC Camera Scan</h2>
+        <p className="text-sm text-muted-foreground mt-1">Use the camera on a UPC label, barcode, clearance tag, shelf tag, box, or app screen. The scan captures the image and extracts UPC, item data, and price details.</p>
       </div>
 
       {/* Upload Area */}
@@ -122,14 +133,14 @@ export default function PhotoScan() {
             ) : (
               <>
                 <Camera className="h-12 w-12 text-muted-foreground mb-3" />
-                <p className="text-sm text-muted-foreground text-center">Tap to upload an image or take a photo</p>
+                <p className="text-sm text-muted-foreground text-center">Tap to upload an image or take a UPC photo</p>
               </>
             )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <Button variant="outline" className="w-full" onClick={() => cameraInputRef.current?.click()}>
-              <Camera className="mr-2 h-4 w-4" /> Take Photo
+              <Camera className="mr-2 h-4 w-4" /> Capture UPC
             </Button>
             <Button variant="outline" className="w-full" onClick={() => fileInputRef.current?.click()}>
               <Upload className="mr-2 h-4 w-4" /> Upload Image
@@ -173,7 +184,7 @@ export default function PhotoScan() {
 
           <Button className="w-full text-base font-bold py-6" onClick={handleScan} disabled={photoScan.isPending || !file}>
             <Zap className="mr-2 h-5 w-5" />
-            {photoScan.isPending ? "Scanning..." : "Quick Scan"}
+            {photoScan.isPending ? "Scanning UPC..." : "Scan UPC Label"}
           </Button>
         </CardContent>
       </Card>
@@ -239,7 +250,7 @@ export default function PhotoScan() {
                   </div>
 
                   <div className="flex items-center gap-2 flex-wrap">
-                    <MarkdownCodeBadge code={result.extracted?.markdown_code as string} />
+                    <MarkdownCodeBadge code={result.extracted?.markdown_code ?? ""} />
                     {result.decision.max_quantity && result.decision.max_quantity !== "0" && (
                       <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded-full font-medium">
                         Buy: {result.decision.max_quantity}

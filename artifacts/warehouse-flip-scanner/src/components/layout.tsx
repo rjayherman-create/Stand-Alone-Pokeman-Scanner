@@ -29,6 +29,7 @@ const navSections = [
   {
     title: "Find & Scan",
     items: [
+      { href: "/upc-scan", label: "UPC Camera", icon: Camera, highlight: true },
       { href: "/quick-scan", label: "Quick Scan", icon: Zap, highlight: true },
       { href: "/pre-store-scan", label: "Pre-Store Scan", icon: Map },
       { href: "/thrift-scan", label: "Thrift Scan", icon: MapPin },

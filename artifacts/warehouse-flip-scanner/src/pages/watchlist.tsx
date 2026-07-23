@@ -51,14 +51,14 @@ export default function Watchlist() {
     await createItem.mutateAsync({
       data: {
         product_name: productName,
-        item_number: itemNumber || undefined,
+        item_number: itemNumber.trim() || productName.trim(),
         desired_buy_price: desiredBuyPrice ? parseFloat(desiredBuyPrice) : undefined,
         target_resale_price: targetResalePrice ? parseFloat(targetResalePrice) : undefined,
         stores_to_watch: storesToWatch || undefined,
         notes: notes || undefined,
       }
     });
-    queryClient.invalidateQueries({ queryKey: getListWatchlistItemsQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getListWatchlistQueryKey() });
     toast({ title: "Added to watchlist", description: `${productName} is now being tracked.` });
     resetForm();
   }

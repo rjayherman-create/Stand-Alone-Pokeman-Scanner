@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import { Calculator, Download, PackageCheck, Receipt, ShoppingCart, TrendingUp } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -116,18 +117,18 @@ export default function AccountingLedgerPage() {
 }
 
 function SummaryCards({ summary, loading }: { summary: Row; loading: boolean }) {
-  const cards = [
-    ["Total spent", money(summary.total_spent), Receipt],
-    ["Total sales", money(summary.total_sales), TrendingUp],
-    ["Net profit", money(summary.total_net_profit), Calculator],
-    ["Cash tied up", money(summary.current_cash_tied_up), ShoppingCart],
-    ["Unsold value", money(summary.unsold_inventory_value), PackageCheck],
-    ["Average ROI", pct(summary.average_roi), TrendingUp],
+  const cards: Array<{ label: string; value: string; Icon: LucideIcon }> = [
+    { label: "Total spent", value: money(summary.total_spent), Icon: Receipt },
+    { label: "Total sales", value: money(summary.total_sales), Icon: TrendingUp },
+    { label: "Net profit", value: money(summary.total_net_profit), Icon: Calculator },
+    { label: "Cash tied up", value: money(summary.current_cash_tied_up), Icon: ShoppingCart },
+    { label: "Unsold value", value: money(summary.unsold_inventory_value), Icon: PackageCheck },
+    { label: "Average ROI", value: pct(summary.average_roi), Icon: TrendingUp },
   ];
   return (
     <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
-      {cards.map(([label, value, Icon]) => {
-        const IconComponent = Icon as typeof Receipt;
+      {cards.map(({ label, value, Icon }) => {
+        const IconComponent = Icon;
         return (
           <Card key={String(label)} className="shadow-sm">
             <CardContent className="p-3">

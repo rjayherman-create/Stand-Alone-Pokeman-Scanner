@@ -9,7 +9,11 @@ const upload = multer({
   limits: { fileSize: 20 * 1024 * 1024, files: 4 },
   fileFilter: (_req, file, cb) => {
     const allowed = file.mimetype.startsWith("image/");
-    cb(allowed ? null : new Error("Only image files are supported for Pokémon product scans."), allowed);
+    if (!allowed) {
+      cb(new Error("Only image files are supported for Pokémon product scans."));
+      return;
+    }
+    cb(null, true);
   },
 });
 
@@ -19,6 +23,7 @@ function parseJson(text: string) {
   return JSON.parse(match[0]) as Record<string, unknown>;
 }
 
+<<<<<<< HEAD
 function clean(value: unknown) {
   return String(value ?? "").trim();
 }
@@ -109,6 +114,14 @@ router.post("/pokemon/scan", upload.array("images", 4), async (req, res) => {
     const submittedUpc = normalizeUpc(req.body.upc || req.body.barcode);
     if (!files.length && !submittedUpc) {
       return res.status(400).json({ success: false, error: "Upload a product image or submit a UPC." });
+=======
+router.post("/pokemon/scan", upload.array("images", 4), async (req, res): Promise<void> => {
+  try {
+    const files = (req.files as Express.Multer.File[] | undefined) ?? [];
+    if (!files.length) {
+      res.status(400).json({ success: false, error: "Upload at least one product image using the images field." });
+      return;
+>>>>>>> 97a637d (Add UPC camera scan and OCR fixes)
     }
 
     const retailer = String(req.body.retailer || "Unknown retailer");
@@ -156,11 +169,7 @@ router.post("/pokemon/scan", upload.array("images", 4), async (req, res) => {
         image_url: { url: `data:${file.mimetype};base64,${file.buffer.toString("base64")}`, detail: "high" as const },
       }));
       const completion = await openai.chat.completions.create({
-        model: "gpt-4.1-mini",
-        max_completion_tokens: 1200,
-        messages: [
-          {
-            role: "system",
+          cb(allowed ? null : new Error("Only image files are supported for Pokémon product scans."), allowed);
             content: "You identify Pokémon TCG cards, graded cards, and sealed products from photos. Return only valid JSON. Never invent a UPC, set, collector number, promo, language, grade, or identifier. Use null when uncertain. Identification is not authentication.",
           },
           {
@@ -191,7 +200,7 @@ router.post("/pokemon/scan", upload.array("images", 4), async (req, res) => {
       : [];
     const scanCostUsd = estimateOpenAiCost(inputTokens, outputTokens);
 
-    const savedItems = [];
+    const savedItems: Array<typeof inventoryItemsTable.$inferSelect> = [];
     for (let unit = 1; unit <= quantity; unit += 1) {
       const [saved] = await db.insert(inventoryItemsTable).values({
         retailer,
@@ -244,9 +253,11 @@ router.post("/pokemon/scan", upload.array("images", 4), async (req, res) => {
         market_check: savedItems.map(item => `/api/pokemon/market-check/${item.id}`),
       },
     });
+    return;
   } catch (error) {
     req.log?.error?.({ error }, "Pokemon scan failed");
     res.status(500).json({ success: false, error: error instanceof Error ? error.message : "Pokémon scan failed." });
+    return;
   }
 });
 

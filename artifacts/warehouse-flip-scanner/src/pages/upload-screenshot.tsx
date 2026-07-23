@@ -84,13 +84,14 @@ export default function UploadScreenshot() {
 
   async function handleOcr() {
     if (!file) return;
-    const formData = new FormData();
-    formData.append("image", file);
-    formData.append("retailer", retailer);
-    formData.append("store_location", store);
-    formData.append("search_term", searchTerm);
-
-    screenshotOcr.mutate({ data: formData as unknown as { image: Blob; store_location: string; search_term?: string } }, {
+    screenshotOcr.mutate({
+      data: {
+        image: file,
+        retailer,
+        store_location: store,
+        search_term: searchTerm,
+      },
+    }, {
       onSuccess: (data) => {
         const d = data as unknown as typeof ocrResult;
         setOcrResult(d);

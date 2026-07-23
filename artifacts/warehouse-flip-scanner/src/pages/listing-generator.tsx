@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 interface InventoryItem {
   id: number;
   product_name: string;
+  retailer?: string | null;
   store_location?: string | null;
   price?: number | null;
   recommendation?: string | null;

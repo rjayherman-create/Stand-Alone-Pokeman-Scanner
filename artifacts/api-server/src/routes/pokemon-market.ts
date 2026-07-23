@@ -130,10 +130,13 @@ router.get("/pokemon/portfolio", async (_req, res) => {
   res.json({ items, checkedAt: new Date().toISOString() });
 });
 
-router.post("/pokemon/market-check/:id", async (req, res) => {
+router.post("/pokemon/market-check/:id", async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   const [item] = await db.select().from(inventoryItemsTable).where(eq(inventoryItemsTable.id, id)).limit(1);
-  if (!item) return res.status(404).json({ error: "Inventory item not found" });
+  if (!item) {
+    res.status(404).json({ error: "Inventory item not found" });
+    return;
+  }
 
   const ids = idsFrom(item);
   const quotes = await Promise.all([
@@ -168,6 +171,7 @@ router.post("/pokemon/market-check/:id", async (req, res) => {
       "eBay Browse provides active listings, not dependable completed-sale history. Do not treat asking prices as sold prices.",
     ],
   });
+  return;
 });
 
 export default router;

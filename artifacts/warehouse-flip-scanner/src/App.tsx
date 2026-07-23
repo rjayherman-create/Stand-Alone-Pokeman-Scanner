@@ -53,6 +53,7 @@ function Router() {
         <Route path="/pre-store-scan" component={PreStoreScanPage} />
         <Route path="/thrift-scan" component={ThriftScanPage} />
         <Route path="/shelf-scan" component={ShelfScanPage} />
+        <Route path="/upc-scan" component={PhotoScan} />
         <Route path="/comp-lookup" component={CompLookup} />
         <Route path="/budget-planner" component={BudgetPlanner} />
         <Route path="/selling-assistant" component={SellingAssistantPage} />

@@ -17,23 +17,24 @@ type PreStoreItemInput = {
   retailer?: string;
   store_location?: string;
   product_name?: string;
-  category?: string;
-  item_number?: string;
-  upc?: string;
-  sku?: string;
-  dpci?: string;
-  tcin?: string;
-  online_price?: number;
-  in_store_price?: number;
-  stock_status?: string;
-  markdown_signal?: string;
-  data_source?: string;
-  source_confidence?: string;
-  ebay_active_median?: number;
-  ebay_sold_median?: number;
-  amazon_reference_price?: number;
-  expected_facebook_sale_price?: number;
-  distance_to_store?: number;
+  category?: string | null;
+  item_number?: string | null;
+  upc?: string | null;
+  sku?: string | null;
+  dpci?: string | null;
+  tcin?: string | null;
+  online_price?: number | null;
+  in_store_price?: number | null;
+  stock_status?: string | null;
+  markdown_signal?: string | null;
+  data_source?: string | null;
+  source_confidence?: string | null;
+  ebay_active_median?: number | null;
+  ebay_sold_median?: number | null;
+  amazon_reference_price?: number | null;
+  expected_facebook_sale_price?: number | null;
+  distance_to_store?: number | null;
+  last_seen_at?: string | null;
 };
 
 const CATEGORY_DEMAND: Record<string, number> = {
@@ -292,7 +293,7 @@ router.post("/pre-store-scan/run-comps", async (req, res) => {
   const items = ids.length
     ? await db.select().from(preStoreScanItemsTable).where(inArray(preStoreScanItemsTable.id, ids))
     : await db.select().from(preStoreScanItemsTable).where(eq(preStoreScanItemsTable.pre_store_scan_session_id, Number(req.body.session_id)));
-  const updated = [];
+  const updated: Array<typeof preStoreScanItemsTable.$inferSelect> = [];
   for (const item of items) {
     const expected = item.expected_facebook_sale_price ?? item.ebay_sold_median ?? item.ebay_active_median ?? item.amazon_reference_price ?? (item.online_price ? item.online_price * 1.45 : null);
     const scored = scorePreStoreOpportunity({ ...item, expected_facebook_sale_price: expected ?? undefined, source_confidence: item.source_confidence });

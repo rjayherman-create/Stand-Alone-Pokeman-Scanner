@@ -25,6 +25,7 @@ interface PlanItem {
   risk_notes?: string | null;
   bought_status: boolean;
   item_status: string;
+  user_removed?: boolean;
 }
 
 interface Plan {
